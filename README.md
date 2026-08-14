@@ -2,7 +2,7 @@
 
 ![build](https://img.shields.io/badge/build-not_configured_yet-lightgrey)
 ![license](https://img.shields.io/badge/license-MIT-blue)
-![.NET](https://img.shields.io/badge/.NET-8-purple)
+![.NET](https://img.shields.io/badge/.NET-10-purple)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue)
 
 > 🚧 Personal portfolio project, under active development. See
