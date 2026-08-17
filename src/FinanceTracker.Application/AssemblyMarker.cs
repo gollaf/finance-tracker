@@ -1,4 +1,4 @@
 namespace FinanceTracker.Application
 {
-    public class AssembleyMarker { }
+    public class AssemblyMarker { }
 }
