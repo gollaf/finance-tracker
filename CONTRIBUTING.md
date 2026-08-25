@@ -9,9 +9,9 @@ because a clean history is part of what this project demonstrates.
 No `develop`/`release` branches (that's GitFlow, built for teams shipping
 parallel releases — overkill here).
 
-- `main` is always in a working, buildable state.
-- No direct commits to `main`, except the initial scaffold.
-- Every unit of work gets its own branch off `main`.
+- `master` is always in a working, buildable state.
+- No direct commits to `master`, except the initial scaffold.
+- Every unit of work gets its own branch off `master`.
 - Open a PR, self-review it, merge, delete the branch.
 
 **Branch naming** — `<type>/<kebab-case-description>`:
@@ -62,8 +62,8 @@ fix(worker): retry RabbitMQ connection on startup
 2. Imperative mood, ≤50 char summary, no trailing period.
 3. Commit tests with the code they test, not batched at the end.
 4. Every commit leaves the solution buildable. Unfinished work stays on
-   its branch, never pushed broken to `main`.
-5. No direct commits to `main` except the initial scaffold commit.
+   its branch, never pushed broken to `master`.
+5. No direct commits to `master` except the initial scaffold commit.
 
 ## Before Merging a PR
 
