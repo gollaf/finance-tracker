@@ -37,7 +37,7 @@ namespace FinanceTracker.Application.Accounts.GetAccountBalance
             var balance = transactions.Aggregate(
                 Money.Zero(account.Currency), (total, transaction) => total + transaction.SignedAmount);
 
-            return balance;
+            return Result.Success(balance);
         }
     }
 }

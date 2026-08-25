@@ -41,7 +41,7 @@ namespace FinanceTracker.Application.Transactions.AddTransaction
 
             await _transactionRepository.AddAsync(transaction, cancellationToken);
 
-            return transaction.Id;
+            return Result.Success(transaction.Id);
         }
     }
 }

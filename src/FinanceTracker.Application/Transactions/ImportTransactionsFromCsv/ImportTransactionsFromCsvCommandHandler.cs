@@ -76,7 +76,7 @@ namespace FinanceTracker.Application.Transactions.ImportTransactionsFromCsv
                 }
             }
 
-            return new ImportTransactionsResult(importedIds, errors);
+            return Result.Success(new ImportTransactionsResult(importedIds, errors));
         }
     }
 }

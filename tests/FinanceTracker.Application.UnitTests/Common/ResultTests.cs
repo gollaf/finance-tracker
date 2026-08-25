@@ -56,14 +56,5 @@ namespace FinanceTracker.Application.UnitTests.Common
             result.IsFailure.Should().BeTrue();
             result.Error.Should().Be(error);
         }
-
-        [Fact]
-        public void ImplicitConversion_FromValue_ProducesSuccess()
-        {
-            Result<int> result = 42;
-
-            result.IsSuccess.Should().BeTrue();
-            result.Value.Should().Be(42);
-        }
     }
 }
