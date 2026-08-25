@@ -27,7 +27,7 @@ namespace FinanceTracker.Application.Accounts.CreateAccount
 
             await _accountRepository.AddAsync(account, cancellationToken);
 
-            return account.Id;
+            return Result.Success(account.Id);
         }
     }
 }

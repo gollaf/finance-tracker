@@ -49,7 +49,7 @@ namespace FinanceTracker.Application.Budgets.CreateBudget
 
             await _budgetRepository.AddAsync(budget, cancellationToken);
 
-            return budget.Id;
+            return Result.Success(budget.Id);
         }
     }
 }

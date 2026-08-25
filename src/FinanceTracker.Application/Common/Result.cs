@@ -44,7 +44,5 @@ namespace FinanceTracker.Application.Common
         public TValue Value => IsSuccess
             ? _value!
             : throw new InvalidOperationException("Cannot access Value on a failed Result.");
-
-        public static implicit operator Result<TValue>(TValue value) => Success(value);
     }
 }
