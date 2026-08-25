@@ -1,3 +1,4 @@
+using FinanceTracker.Application.Budgets;
 using FinanceTracker.Application.Budgets.CreateBudget;
 using FinanceTracker.Application.Categories;
 using FinanceTracker.Application.Common;
