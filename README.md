@@ -1,6 +1,6 @@
 # Finance Tracker
 
-![build](https://img.shields.io/badge/build-not_configured_yet-lightgrey)
+[![build](https://github.com/gollaf/finance-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/gollaf/finance-tracker/actions/workflows/ci.yml)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![.NET](https://img.shields.io/badge/.NET-10-purple)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue)
@@ -47,7 +47,7 @@ Frontend (planned): Angular
 ## Getting Started
 
 ```bash
-git clone https://github.com/<your-username>/finance-tracker.git
+git clone https://github.com/gollaf/finance-tracker.git
 cd finance-tracker
 docker compose up
 ```

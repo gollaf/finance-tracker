@@ -16,10 +16,10 @@ and intentionally scoped to teach specific technologies.
 
 **Commands:** CreateAccount, AddTransaction, UpdateTransaction,
 DeleteTransaction, CreateBudget, UpdateBudget, CategorizeTransaction,
-ImportTransactionsFromCsv
+ImportTransactionsFromCsv, CreateCategory, CreateCategorizationRule
 
 **Queries:** GetTransactions (filtered/paged), GetSpendingSummary,
-GetBudgetStatus, GetSpendingInsights, GetAccountBalance
+GetBudgetStatus, GetAccountBalance, GetSpendingInsights (Phase 4)
 
 ## Tech Stack
 
@@ -50,8 +50,8 @@ Clean Architecture, dependency rule points inward:
 
 ## Roadmap
 
-- [ ] **Phase 1** — Domain & Application core (entities, use cases, unit tests)
-- [ ] **Phase 2** — Infrastructure & API (EF Core, Postgres, Testcontainers)
+- [x] **Phase 1** — Domain & Application core (entities, use cases, unit tests)
+- [ ] **Phase 2** — Infrastructure & API (EF Core, Postgres, Testcontainers, Swagger/OpenAPI)
 - [ ] **Phase 3** — Dockerize (Dockerfile, docker-compose)
 - [ ] **Phase 4** — AI feature, synchronous first version
 - [ ] **Phase 5** — Async processing via RabbitMQ (refactor AI + CSV import)
