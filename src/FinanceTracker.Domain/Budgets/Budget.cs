@@ -13,7 +13,7 @@ namespace FinanceTracker.Domain.Budgets
 
         public CategoryId CategoryId { get; }
 
-        public BudgetPeriod Period { get; }
+        public BudgetPeriod Period { get; private set; }
 
         public Money LimitAmount { get; private set; }
 
@@ -23,6 +23,22 @@ namespace FinanceTracker.Domain.Budgets
             CategoryId = categoryId;
             Period = period;
             LimitAmount = limitAmount;
+        }
+
+        // Used only by EF Core to materialize a Budget loaded from the
+        // database. Period and LimitAmount are mapped as EF Core complex
+        // properties (see docs/adr/0003-ef-core-persistence-mapping.md), and
+        // EF Core's constructor binding can never pass a complex-typed value
+        // into a constructor parameter -- it can only set one via a property
+        // afterward. This constructor exists purely so a constructor EF Core
+        // CAN use (binding only Id and CategoryId) is available; Domain code
+        // itself only ever calls the four-parameter constructor above.
+        private Budget(BudgetId id, CategoryId categoryId)
+        {
+            Id = id;
+            CategoryId = categoryId;
+            Period = null!;
+            LimitAmount = null!;
         }
 
         public static Budget Create(CategoryId categoryId, BudgetPeriod period, Money limitAmount)

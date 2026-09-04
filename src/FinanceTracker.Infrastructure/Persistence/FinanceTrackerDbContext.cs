@@ -1,4 +1,5 @@
 using FinanceTracker.Domain.Accounts;
+using FinanceTracker.Domain.Budgets;
 using FinanceTracker.Domain.Categories;
 using FinanceTracker.Domain.Categorization;
 using Microsoft.EntityFrameworkCore;
@@ -23,6 +24,8 @@ namespace FinanceTracker.Infrastructure.Persistence
         public DbSet<Category> Categories => Set<Category>();
 
         public DbSet<CategorizationRule> CategorizationRules => Set<CategorizationRule>();
+
+        public DbSet<Budget> Budgets => Set<Budget>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
