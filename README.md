@@ -77,6 +77,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0002 — Transaction as a separate aggregate; Account has no stored balance](./docs/adr/0002-transaction-separate-aggregate-no-stored-balance.md)
 - [0003 — EF Core persistence mapping for strongly-typed IDs and value objects](./docs/adr/0003-ef-core-persistence-mapping.md)
 - [0004 — API layer: MVC controllers and a fixed Result-to-HTTP mapping](./docs/adr/0004-api-mvc-controllers-result-mapping.md)
+- [0005 — Cross-aggregate foreign keys without navigation properties](./docs/adr/0005-cross-aggregate-foreign-keys.md)
 
 ## License
 

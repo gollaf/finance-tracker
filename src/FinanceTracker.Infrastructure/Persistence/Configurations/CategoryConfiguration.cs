@@ -7,16 +7,14 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 namespace FinanceTracker.Infrastructure.Persistence.Configurations
 {
     /// <summary>
-    /// Maps Category to its "Categories" table. ParentCategoryId is mapped
-    /// as a plain converted column, not an EF Core relationship, on
-    /// purpose: Category has no navigation property to its parent (see
-    /// docs/domain-model.md), and this configuration deliberately mirrors
-    /// that boundary rather than quietly reintroducing the object-graph
-    /// coupling the Domain model avoids. Whether cross-aggregate ID columns
-    /// like this one should also get a database-level foreign key
-    /// constraint (EF Core supports one without a navigation property) is a
-    /// real decision, made once it can be illustrated with a genuinely
-    /// cross-aggregate reference rather than this same-table self-reference.
+    /// Maps Category to its "Categories" table. ParentCategoryId is a plain
+    /// converted column with no Domain navigation property — Category has
+    /// no navigation to its parent (see docs/domain-model.md), and this
+    /// configuration mirrors that boundary rather than reintroducing the
+    /// object-graph coupling the Domain model avoids. It does get a real
+    /// database-level foreign key constraint back onto Categories itself
+    /// (self-referencing), configured without a navigation property, per
+    /// ADR 0005.
     /// </summary>
     public sealed class CategoryConfiguration : IEntityTypeConfiguration<Category>
     {
@@ -39,6 +37,15 @@ namespace FinanceTracker.Infrastructure.Persistence.Configurations
 
             builder.Property(c => c.ParentCategoryId)
                 .HasConversion(new StronglyTypedIdValueConverter<CategoryId>(id => id.Value, value => new CategoryId(value)));
+
+            // Self-referencing foreign key, no navigation property on either
+            // side (see ADR 0005). Restrict rather than Cascade/SetNull: a
+            // Category with children must not be deletable by silently
+            // orphaning or renumbering them.
+            builder.HasOne<Category>()
+                .WithMany()
+                .HasForeignKey(c => c.ParentCategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

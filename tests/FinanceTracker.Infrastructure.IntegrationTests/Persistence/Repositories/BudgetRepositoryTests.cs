@@ -1,4 +1,5 @@
 using FinanceTracker.Domain.Budgets;
+using FinanceTracker.Domain.Categories;
 using FinanceTracker.Domain.Common;
 using FinanceTracker.Infrastructure.Persistence;
 using FinanceTracker.Infrastructure.Persistence.Repositories;
@@ -15,6 +16,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
 
         private FinanceTrackerDbContext _context = null!;
         private BudgetRepository _repository = null!;
+        private CategoryRepository _categoryRepository = null!;
 
         public async Task InitializeAsync()
         {
@@ -27,6 +29,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
             await _context.Database.MigrateAsync();
 
             _repository = new BudgetRepository(_context);
+            _categoryRepository = new CategoryRepository(_context);
         }
 
         public async Task DisposeAsync()
@@ -35,10 +38,21 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
             await _postgres.DisposeAsync();
         }
 
+        // Budget.CategoryId now has a real foreign key onto Categories (ADR
+        // 0005), so every test that persists a budget needs a Category row
+        // that actually exists first — CategoryId.New() alone is no longer
+        // enough, the database will reject it.
+        private async Task<CategoryId> CreatePersistedCategoryAsync(string name = "Food")
+        {
+            var category = Category.Create(name);
+            await _categoryRepository.AddAsync(category, CancellationToken.None);
+            return category.Id;
+        }
+
         [Fact]
         public async Task AddAsync_ThenGetByIdAsync_RoundTripsAllFields()
         {
-            var categoryId = CategoryId.New();
+            var categoryId = await CreatePersistedCategoryAsync();
             var period = BudgetPeriod.Create(2026, 9);
             var limit = Money.Create(500m, "USD");
             var budget = Budget.Create(categoryId, period, limit);
@@ -64,7 +78,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         [Fact]
         public async Task GetByCategoryAndPeriodAsync_WithMatch_ReturnsBudget()
         {
-            var categoryId = CategoryId.New();
+            var categoryId = await CreatePersistedCategoryAsync();
             var period = BudgetPeriod.Create(2026, 9);
             var budget = Budget.Create(categoryId, period, Money.Create(500m, "USD"));
             await _repository.AddAsync(budget, CancellationToken.None);
@@ -78,7 +92,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         [Fact]
         public async Task GetByCategoryAndPeriodAsync_WithDifferentPeriod_ReturnsNull()
         {
-            var categoryId = CategoryId.New();
+            var categoryId = await CreatePersistedCategoryAsync();
             var budget = Budget.Create(categoryId, BudgetPeriod.Create(2026, 9), Money.Create(500m, "USD"));
             await _repository.AddAsync(budget, CancellationToken.None);
 
@@ -91,7 +105,8 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         [Fact]
         public async Task UpdateAsync_PersistsChangedLimit()
         {
-            var budget = Budget.Create(CategoryId.New(), BudgetPeriod.Create(2026, 9), Money.Create(500m, "USD"));
+            var categoryId = await CreatePersistedCategoryAsync();
+            var budget = Budget.Create(categoryId, BudgetPeriod.Create(2026, 9), Money.Create(500m, "USD"));
             await _repository.AddAsync(budget, CancellationToken.None);
 
             budget.UpdateLimit(Money.Create(750m, "USD"));
