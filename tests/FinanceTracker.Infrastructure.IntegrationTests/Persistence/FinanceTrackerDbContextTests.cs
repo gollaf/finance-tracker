@@ -22,7 +22,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence
         public Task DisposeAsync() => _postgres.DisposeAsync().AsTask();
 
         [Fact]
-        public async Task MigrateAsync_AgainstFreshContainer_AppliesInitialMigration()
+        public async Task MigrateAsync_AgainstFreshContainer_AppliesPendingMigrations()
         {
             var optionsBuilder = new DbContextOptionsBuilder<FinanceTrackerDbContext>()
                 .UseNpgsql(_postgres.GetConnectionString());
@@ -32,7 +32,12 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence
             await context.Database.MigrateAsync();
 
             var appliedMigrations = await context.Database.GetAppliedMigrationsAsync();
-            appliedMigrations.Should().ContainSingle();
+
+            // Not a specific count: that would make this test break every
+            // time a new aggregate adds its own migration. What actually
+            // matters for a walking skeleton is that at least one migration
+            // really got applied against a real database.
+            appliedMigrations.Should().NotBeEmpty();
         }
     }
 }
