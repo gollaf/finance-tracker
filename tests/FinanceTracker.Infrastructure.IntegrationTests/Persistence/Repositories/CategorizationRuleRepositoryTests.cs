@@ -1,3 +1,4 @@
+using FinanceTracker.Domain.Categories;
 using FinanceTracker.Domain.Categorization;
 using FinanceTracker.Domain.Common;
 using FinanceTracker.Infrastructure.Persistence;
@@ -15,6 +16,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
 
         private FinanceTrackerDbContext _context = null!;
         private CategorizationRuleRepository _repository = null!;
+        private CategoryRepository _categoryRepository = null!;
 
         public async Task InitializeAsync()
         {
@@ -27,6 +29,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
             await _context.Database.MigrateAsync();
 
             _repository = new CategorizationRuleRepository(_context);
+            _categoryRepository = new CategoryRepository(_context);
         }
 
         public async Task DisposeAsync()
@@ -35,10 +38,21 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
             await _postgres.DisposeAsync();
         }
 
+        // CategorizationRule.CategoryId now has a real foreign key onto
+        // Categories (ADR 0005), so every test that persists a rule needs a
+        // Category row that actually exists first — CategoryId.New() alone
+        // is no longer enough, the database will reject it.
+        private async Task<CategoryId> CreatePersistedCategoryAsync(string name = "Food")
+        {
+            var category = Category.Create(name);
+            await _categoryRepository.AddAsync(category, CancellationToken.None);
+            return category.Id;
+        }
+
         [Fact]
         public async Task AddAsync_ThenGetAllAsync_RoundTripsAllFields()
         {
-            var categoryId = CategoryId.New();
+            var categoryId = await CreatePersistedCategoryAsync();
             var rule = CategorizationRule.Create("starbucks", categoryId, priority: 1);
 
             await _repository.AddAsync(rule, CancellationToken.None);
@@ -55,9 +69,11 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         [Fact]
         public async Task GetAllAsync_WithMultipleRules_ReturnsAllOfThem()
         {
-            await _repository.AddAsync(CategorizationRule.Create("starbucks", CategoryId.New(), 1), CancellationToken.None);
-            await _repository.AddAsync(CategorizationRule.Create("uber", CategoryId.New(), 2), CancellationToken.None);
-            await _repository.AddAsync(CategorizationRule.Create("netflix", CategoryId.New(), 3), CancellationToken.None);
+            var categoryId = await CreatePersistedCategoryAsync();
+
+            await _repository.AddAsync(CategorizationRule.Create("starbucks", categoryId, 1), CancellationToken.None);
+            await _repository.AddAsync(CategorizationRule.Create("uber", categoryId, 2), CancellationToken.None);
+            await _repository.AddAsync(CategorizationRule.Create("netflix", categoryId, 3), CancellationToken.None);
 
             var rules = await _repository.GetAllAsync(CancellationToken.None);
 
