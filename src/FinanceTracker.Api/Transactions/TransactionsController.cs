@@ -2,6 +2,7 @@ using FinanceTracker.Api.Common;
 using FinanceTracker.Application.Transactions.AddTransaction;
 using FinanceTracker.Application.Transactions.CategorizeTransaction;
 using FinanceTracker.Application.Transactions.DeleteTransaction;
+using FinanceTracker.Application.Transactions.GetSpendingSummary;
 using FinanceTracker.Application.Transactions.GetTransactions;
 using FinanceTracker.Application.Transactions.UpdateTransaction;
 using FinanceTracker.Domain.Common;
@@ -12,8 +13,8 @@ namespace FinanceTracker.Api.Transactions
 {
     /// <summary>
     /// Covers Transaction's core lifecycle (Add, Update, Delete), assigning
-    /// a Category, and listing an Account's Transactions. GetSpendingSummary
-    /// lands here in a later piece.
+    /// a Category, listing an Account's Transactions, and summarizing its
+    /// spending by Category for a month.
     /// </summary>
     [ApiController]
     [Route("api/transactions")]
@@ -113,6 +114,27 @@ namespace FinanceTracker.Api.Transactions
                     t.Type,
                     t.Description,
                     t.OccurredOn))
+                .ToList();
+
+            return Ok(response);
+        }
+
+        // spending-summary is its own literal path segment, not a route
+        // parameter -- it reports across every Transaction matching
+        // AccountId+Year+Month, so there's no single Transaction id to
+        // hang this off of the way Categorize hangs off {id}.
+        [HttpGet("spending-summary")]
+        public async Task<IActionResult> GetSpendingSummary(
+            [FromQuery] Guid accountId, [FromQuery] int year, [FromQuery] int month, CancellationToken cancellationToken)
+        {
+            var query = new GetSpendingSummaryQuery(new AccountId(accountId), year, month);
+            var result = await _sender.Send(query, cancellationToken);
+
+            if (result.IsFailure)
+                return result.ToActionResult();
+
+            var response = result.Value
+                .Select(s => new CategorySpendingResponse(s.CategoryId?.Value, s.Total.Amount, s.Total.Currency))
                 .ToList();
 
             return Ok(response);

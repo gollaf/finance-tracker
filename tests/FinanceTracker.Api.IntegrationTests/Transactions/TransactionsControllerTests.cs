@@ -297,5 +297,108 @@ namespace FinanceTracker.Api.IntegrationTests.Transactions
             var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
             problem!.Status.Should().Be((int)HttpStatusCode.BadRequest);
         }
+
+        [Fact]
+        public async Task GetSpendingSummary_GroupsExpensesByCategory()
+        {
+            var accountId = await CreatePersistedAccountAsync();
+            var categoryId = await CreatePersistedCategoryAsync();
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+            var firstId = await CreatePersistedTransactionAsync(accountId, today);
+            await _client.PutAsJsonAsync($"/api/transactions/{firstId}/category", new CategorizeTransactionRequest(categoryId));
+            var secondId = await CreatePersistedTransactionAsync(accountId, today);
+            await _client.PutAsJsonAsync($"/api/transactions/{secondId}/category", new CategorizeTransactionRequest(categoryId));
+
+            var response = await _client.GetAsync(
+                $"/api/transactions/spending-summary?accountId={accountId}&year={today.Year}&month={today.Month}");
+
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            var results = await response.Content.ReadFromJsonAsync<List<CategorySpendingResponse>>();
+            results.Should().ContainSingle();
+            results![0].CategoryId.Should().Be(categoryId);
+            results[0].Total.Should().Be(50.00m);
+            results[0].Currency.Should().Be("USD");
+        }
+
+        [Fact]
+        public async Task GetSpendingSummary_IncludesUncategorizedSpendingWithNullCategoryId()
+        {
+            var accountId = await CreatePersistedAccountAsync();
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            await CreatePersistedTransactionAsync(accountId, today);
+
+            var response = await _client.GetAsync(
+                $"/api/transactions/spending-summary?accountId={accountId}&year={today.Year}&month={today.Month}");
+
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            var results = await response.Content.ReadFromJsonAsync<List<CategorySpendingResponse>>();
+            results.Should().ContainSingle();
+            results![0].CategoryId.Should().BeNull();
+        }
+
+        [Fact]
+        public async Task GetSpendingSummary_ExcludesIncomeTransactions()
+        {
+            var accountId = await CreatePersistedAccountAsync();
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            await _client.PostAsJsonAsync(
+                "/api/transactions", new AddTransactionRequest(accountId, 1000m, TransactionType.Income, "Paycheck", today));
+
+            var response = await _client.GetAsync(
+                $"/api/transactions/spending-summary?accountId={accountId}&year={today.Year}&month={today.Month}");
+
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            var results = await response.Content.ReadFromJsonAsync<List<CategorySpendingResponse>>();
+            results.Should().BeEmpty();
+        }
+
+        [Fact]
+        public async Task GetSpendingSummary_ExcludesTransactionsOutsideThePeriod()
+        {
+            var accountId = await CreatePersistedAccountAsync();
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var lastMonth = today.AddMonths(-1);
+            await CreatePersistedTransactionAsync(accountId, lastMonth);
+
+            var response = await _client.GetAsync(
+                $"/api/transactions/spending-summary?accountId={accountId}&year={today.Year}&month={today.Month}");
+
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            var results = await response.Content.ReadFromJsonAsync<List<CategorySpendingResponse>>();
+            results.Should().BeEmpty();
+        }
+
+        [Fact]
+        public async Task GetSpendingSummary_WithUnknownAccountId_Returns404ProblemDetails()
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+            var response = await _client.GetAsync(
+                $"/api/transactions/spending-summary?accountId={Guid.NewGuid()}&year={today.Year}&month={today.Month}");
+
+            response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+            var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+            problem!.Status.Should().Be((int)HttpStatusCode.NotFound);
+        }
+
+        [Fact]
+        public async Task GetSpendingSummary_WithInvalidMonth_Returns400ProblemDetails()
+        {
+            var accountId = await CreatePersistedAccountAsync();
+
+            var response = await _client.GetAsync(
+                $"/api/transactions/spending-summary?accountId={accountId}&year=2026&month=13");
+
+            response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+            var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+            problem!.Status.Should().Be((int)HttpStatusCode.BadRequest);
+        }
     }
 }
