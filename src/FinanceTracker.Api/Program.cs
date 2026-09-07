@@ -1,6 +1,7 @@
 using FinanceTracker.Application;
 using FinanceTracker.Infrastructure;
 using Microsoft.AspNetCore.Diagnostics;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,6 +9,15 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services
     .AddApplication()
     .AddInfrastructure(builder.Configuration);
+
+// AddJsonOptions applies to both request binding and response
+// serialization -- so, e.g., AccountType travels over HTTP as
+// "Checking" rather than an unreadable integer, matching the same
+// readability call ADR 0003 already made for how enums are stored.
+builder.Services.AddControllers().AddJsonOptions(options =>
+{
+    options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
 
 // Backs app.UseExceptionHandler() below: any exception that isn't already
 // a Result failure -- a genuine bug, per ADR 0004 -- gets turned into a
@@ -31,8 +41,11 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 
+app.MapControllers();
+
 app.Run();
 
-// Exposes the top-level Program for FinanceTracker.Api.IntegrationTests'
-// WebApplicationFactory<Program> once that project exists.
+// Exposes the top-level Program so FinanceTracker.Api.IntegrationTests'
+// CustomWebApplicationFactory : WebApplicationFactory<Program> can boot
+// this exact host in tests.
 public partial class Program;
