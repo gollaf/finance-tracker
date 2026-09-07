@@ -1,5 +1,7 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FinanceTracker.Api.Accounts;
@@ -61,6 +63,20 @@ namespace FinanceTracker.Api.IntegrationTests.Transactions
                     accountId, 25.00m, TransactionType.Expense, "Coffee", occurredOn ?? DateOnly.FromDateTime(DateTime.UtcNow)));
             var created = await response.Content.ReadFromJsonAsync<AddTransactionResponse>();
             return created!.Id;
+        }
+
+        private static MultipartFormDataContent BuildImportContent(Guid accountId, string csv)
+        {
+            var content = new MultipartFormDataContent
+            {
+                { new StringContent(accountId.ToString()), "AccountId" },
+            };
+
+            var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes(csv));
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue("text/csv");
+            content.Add(fileContent, "File", "transactions.csv");
+
+            return content;
         }
 
         [Fact]
@@ -399,6 +415,101 @@ namespace FinanceTracker.Api.IntegrationTests.Transactions
 
             var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
             problem!.Status.Should().Be((int)HttpStatusCode.BadRequest);
+        }
+
+        [Fact]
+        public async Task Import_WithValidCsv_ImportsAllRowsAndReturns200()
+        {
+            var accountId = await CreatePersistedAccountAsync();
+            const string csv =
+                "Amount,Type,Description,OccurredOn\n" +
+                "25.00,Expense,Coffee,2026-01-10\n" +
+                "1000.00,Income,Paycheck,2026-01-11\n";
+
+            var response = await _client.PostAsync("/api/transactions/import", BuildImportContent(accountId, csv));
+
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            var result = await response.Content.ReadFromJsonAsync<ImportTransactionsResponse>();
+            result!.ImportedTransactionIds.Should().HaveCount(2);
+            result.Errors.Should().BeEmpty();
+        }
+
+        [Fact]
+        public async Task Import_WithOneMalformedRow_ImportsGoodRowsAndReportsTheBadOne()
+        {
+            var accountId = await CreatePersistedAccountAsync();
+            const string csv =
+                "Amount,Type,Description,OccurredOn\n" +
+                "25.00,Expense,Coffee,2026-01-10\n" +
+                "not-a-number,Expense,Bad row,2026-01-11\n";
+
+            var response = await _client.PostAsync("/api/transactions/import", BuildImportContent(accountId, csv));
+
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            var result = await response.Content.ReadFromJsonAsync<ImportTransactionsResponse>();
+            result!.ImportedTransactionIds.Should().HaveCount(1);
+            result.Errors.Should().ContainSingle();
+            result.Errors[0].RowNumber.Should().Be(3);
+        }
+
+        [Fact]
+        public async Task Import_WithQuotedDescriptionContainingComma_ParsesAsOneField()
+        {
+            var accountId = await CreatePersistedAccountAsync();
+            const string csv =
+                "Amount,Type,Description,OccurredOn\n" +
+                "25.00,Expense,\"Groceries, weekly\",2026-01-10\n";
+
+            var response = await _client.PostAsync("/api/transactions/import", BuildImportContent(accountId, csv));
+
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            var result = await response.Content.ReadFromJsonAsync<ImportTransactionsResponse>();
+            result!.ImportedTransactionIds.Should().ContainSingle();
+            result.Errors.Should().BeEmpty();
+        }
+
+        [Fact]
+        public async Task Import_WithUnknownAccountId_Returns404ProblemDetails()
+        {
+            const string csv = "Amount,Type,Description,OccurredOn\n25.00,Expense,Coffee,2026-01-10\n";
+
+            var response = await _client.PostAsync("/api/transactions/import", BuildImportContent(Guid.NewGuid(), csv));
+
+            response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+            var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+            problem!.Status.Should().Be((int)HttpStatusCode.NotFound);
+        }
+
+        [Fact]
+        public async Task Import_WithEmptyFile_Returns400ProblemDetails()
+        {
+            var accountId = await CreatePersistedAccountAsync();
+
+            var response = await _client.PostAsync("/api/transactions/import", BuildImportContent(accountId, ""));
+
+            response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+            var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+            problem!.Status.Should().Be((int)HttpStatusCode.BadRequest);
+        }
+
+        [Fact]
+        public async Task Import_WithOnlyMalformedRows_ReturnsThemAsErrorsWithoutFailingTheRequest()
+        {
+            var accountId = await CreatePersistedAccountAsync();
+            const string csv = "Amount,Type,Description,OccurredOn\nnot-a-number,Expense,Bad row,2026-01-10\n";
+
+            var response = await _client.PostAsync("/api/transactions/import", BuildImportContent(accountId, csv));
+
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            var result = await response.Content.ReadFromJsonAsync<ImportTransactionsResponse>();
+            result!.ImportedTransactionIds.Should().BeEmpty();
+            result.Errors.Should().ContainSingle();
         }
     }
 }

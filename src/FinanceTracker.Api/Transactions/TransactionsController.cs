@@ -4,6 +4,7 @@ using FinanceTracker.Application.Transactions.CategorizeTransaction;
 using FinanceTracker.Application.Transactions.DeleteTransaction;
 using FinanceTracker.Application.Transactions.GetSpendingSummary;
 using FinanceTracker.Application.Transactions.GetTransactions;
+using FinanceTracker.Application.Transactions.ImportTransactionsFromCsv;
 using FinanceTracker.Application.Transactions.UpdateTransaction;
 using FinanceTracker.Domain.Common;
 using MediatR;
@@ -13,8 +14,8 @@ namespace FinanceTracker.Api.Transactions
 {
     /// <summary>
     /// Covers Transaction's core lifecycle (Add, Update, Delete), assigning
-    /// a Category, listing an Account's Transactions, and summarizing its
-    /// spending by Category for a month.
+    /// a Category, listing an Account's Transactions, summarizing its
+    /// spending by Category for a month, and importing a batch from CSV.
     /// </summary>
     [ApiController]
     [Route("api/transactions")]
@@ -136,6 +137,62 @@ namespace FinanceTracker.Api.Transactions
             var response = result.Value
                 .Select(s => new CategorySpendingResponse(s.CategoryId?.Value, s.Total.Amount, s.Total.Currency))
                 .ToList();
+
+            return Ok(response);
+        }
+
+        // The file arrives as multipart/form-data (see ImportTransactionsRequest's
+        // own doc comment for why that one DTO isn't a record). Parsing the raw
+        // CSV text into structured rows is this layer's job -- CsvTransactionRow's
+        // doc comment in Application says as much -- and a row that fails even
+        // that parse is reported the same way a row that parses but fails a
+        // domain rule is: as an entry in Errors, never as a request-level failure.
+        [HttpPost("import")]
+        public async Task<IActionResult> Import([FromForm] ImportTransactionsRequest request, CancellationToken cancellationToken)
+        {
+            if (request.File is null || request.File.Length == 0)
+            {
+                return Problem(
+                    statusCode: StatusCodes.Status400BadRequest,
+                    title: "Transaction.EmptyFile",
+                    detail: "A non-empty CSV file is required.");
+            }
+
+            string csvContent;
+            using (var reader = new StreamReader(request.File.OpenReadStream()))
+            {
+                csvContent = await reader.ReadToEndAsync(cancellationToken);
+            }
+
+            var (parsedRows, parseErrors) = CsvTransactionRowParser.Parse(csvContent);
+
+            // Every row failed to parse (or the file had no data rows at all) --
+            // there's nothing valid to hand the command, and sending it an empty
+            // Rows list would just turn into a generic 400 from its own validator,
+            // burying the real per-row parse errors. Report them directly instead.
+            if (parsedRows.Count == 0)
+            {
+                return Ok(new ImportTransactionsResponse(Array.Empty<Guid>(), parseErrors));
+            }
+
+            var command = new ImportTransactionsFromCsvCommand(
+                new AccountId(request.AccountId), parsedRows.Select(r => r.Row).ToList());
+            var result = await _sender.Send(command, cancellationToken);
+
+            if (result.IsFailure)
+                return result.ToActionResult();
+
+            // The command's own Errors carry a RowIndex into the filtered list of
+            // rows it was actually given, not the file's line numbers -- translate
+            // each one back through ParsedCsvRow.OriginalIndex before merging with
+            // this layer's own parseErrors, which already speak in file line numbers.
+            var handlerErrors = result.Value.Errors
+                .Select(e => new ImportRowErrorResponse(parsedRows[e.RowIndex].OriginalIndex + 2, e.Message));
+
+            var allErrors = parseErrors.Concat(handlerErrors).OrderBy(e => e.RowNumber).ToList();
+
+            var response = new ImportTransactionsResponse(
+                result.Value.ImportedTransactionIds.Select(id => id.Value).ToList(), allErrors);
 
             return Ok(response);
         }
