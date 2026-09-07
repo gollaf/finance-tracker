@@ -1,0 +1,26 @@
+# Normalize every text file's line endings to LF in the repository itself,
+# regardless of what line ending a contributor's editor writes or what
+# their local core.autocrlf is set to. This is the standard cross-platform
+# git convention, and matches .editorconfig's own end_of_line = lf. Without
+# this file, checkouts on different machines (or a local git config that
+# doesn't match .editorconfig) can silently diverge, which is exactly what
+# turned every tracked file in this repo into a full-file diff at one
+# point -- a mismatch between what was actually on disk and what git
+# thought the "correct" line ending was, with nothing pinning either way.
+* text=auto eol=lf
+
+# Windows batch/PowerShell scripts, if this project ever adds any, are the
+# one common exception -- they're expected to keep native Windows endings.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Common binary types -- never let git attempt text normalization or diffing on these.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.dll binary
+*.exe binary
+*.pdf binary
