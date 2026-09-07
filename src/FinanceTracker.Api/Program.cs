@@ -1,6 +1,7 @@
 using FinanceTracker.Application;
 using FinanceTracker.Infrastructure;
 using Microsoft.AspNetCore.Diagnostics;
+using Scalar.AspNetCore;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,6 +19,13 @@ builder.Services.AddControllers().AddJsonOptions(options =>
 {
     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
+
+// AddOpenApi generates the machine-readable API description (served at
+// /openapi/v1.json below) straight from this same JsonOptions
+// configuration, MVC route/model metadata, and XML doc comments if enabled
+// later -- there's no separate schema-generation setup to keep in sync
+// with the JSON options above the way older Swagger tooling needed.
+builder.Services.AddOpenApi();
 
 // Backs app.UseExceptionHandler() below: any exception that isn't already
 // a Result failure -- a genuine bug, per ADR 0004 -- gets turned into a
@@ -40,6 +48,16 @@ builder.Services.AddProblemDetails(options =>
 var app = builder.Build();
 
 app.UseExceptionHandler();
+
+// Both the raw OpenAPI document and Scalar's browsable UI over it are
+// Development-only, same reasoning as the exception detail above: an
+// API's exact shape is useful while building against it locally, not
+// something to expose by default once deployed.
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+    app.MapScalarApiReference();
+}
 
 app.MapControllers();
 
