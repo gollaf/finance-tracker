@@ -51,7 +51,7 @@ Clean Architecture, dependency rule points inward:
 ## Roadmap
 
 - [x] **Phase 1** — Domain & Application core (entities, use cases, unit tests)
-- [ ] **Phase 2** — Infrastructure & API (EF Core, Postgres, Testcontainers, Swagger/OpenAPI)
+- [x] **Phase 2** — Infrastructure & API (EF Core, Postgres, Testcontainers, Scalar/OpenAPI)
 - [ ] **Phase 3** — Dockerize (Dockerfile, docker-compose)
 - [ ] **Phase 4** — AI feature, synchronous first version
 - [ ] **Phase 5** — Async processing via RabbitMQ (refactor AI + CSV import)
