@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using FinanceTracker.Api.Accounts;
+using FinanceTracker.Api.Categories;
 using FinanceTracker.Api.Transactions;
 using FinanceTracker.Domain.Accounts;
 using FinanceTracker.Domain.Transactions;
@@ -24,6 +27,16 @@ namespace FinanceTracker.Api.IntegrationTests.Transactions
             _client = factory.CreateClient();
         }
 
+        // ReadFromJsonAsync uses its own default JsonSerializerOptions, separate from
+        // the server's -- it has no idea Program.cs registered JsonStringEnumConverter
+        // there, so without this it fails to parse an enum the server sent back as a
+        // string (for example "Expense") because its default converter only accepts
+        // the underlying numeric value.
+        private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+        {
+            Converters = { new JsonStringEnumConverter() },
+        };
+
         private async Task<Guid> CreatePersistedAccountAsync()
         {
             var response = await _client.PostAsJsonAsync(
@@ -32,11 +45,20 @@ namespace FinanceTracker.Api.IntegrationTests.Transactions
             return created!.Id;
         }
 
-        private async Task<Guid> CreatePersistedTransactionAsync(Guid accountId)
+        private async Task<Guid> CreatePersistedCategoryAsync()
+        {
+            var response = await _client.PostAsJsonAsync(
+                "/api/categories", new CreateCategoryRequest($"Category-{Guid.NewGuid()}", null));
+            var created = await response.Content.ReadFromJsonAsync<CreateCategoryResponse>();
+            return created!.Id;
+        }
+
+        private async Task<Guid> CreatePersistedTransactionAsync(Guid accountId, DateOnly? occurredOn = null)
         {
             var response = await _client.PostAsJsonAsync(
                 "/api/transactions",
-                new AddTransactionRequest(accountId, 25.00m, TransactionType.Expense, "Coffee", DateOnly.FromDateTime(DateTime.UtcNow)));
+                new AddTransactionRequest(
+                    accountId, 25.00m, TransactionType.Expense, "Coffee", occurredOn ?? DateOnly.FromDateTime(DateTime.UtcNow)));
             var created = await response.Content.ReadFromJsonAsync<AddTransactionResponse>();
             return created!.Id;
         }
@@ -160,6 +182,120 @@ namespace FinanceTracker.Api.IntegrationTests.Transactions
 
             var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
             problem!.Status.Should().Be((int)HttpStatusCode.NotFound);
+        }
+
+        [Fact]
+        public async Task Categorize_WithValidCategoryId_Returns204()
+        {
+            var accountId = await CreatePersistedAccountAsync();
+            var transactionId = await CreatePersistedTransactionAsync(accountId);
+            var categoryId = await CreatePersistedCategoryAsync();
+
+            var response = await _client.PutAsJsonAsync(
+                $"/api/transactions/{transactionId}/category", new CategorizeTransactionRequest(categoryId));
+
+            response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        }
+
+        [Fact]
+        public async Task Categorize_WithNullCategoryId_ClearsCategoryAndReturns204()
+        {
+            var accountId = await CreatePersistedAccountAsync();
+            var transactionId = await CreatePersistedTransactionAsync(accountId);
+            var categoryId = await CreatePersistedCategoryAsync();
+            await _client.PutAsJsonAsync($"/api/transactions/{transactionId}/category", new CategorizeTransactionRequest(categoryId));
+
+            var response = await _client.PutAsJsonAsync(
+                $"/api/transactions/{transactionId}/category", new CategorizeTransactionRequest(null));
+
+            response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        }
+
+        [Fact]
+        public async Task Categorize_WithUnknownTransactionId_Returns404ProblemDetails()
+        {
+            var categoryId = await CreatePersistedCategoryAsync();
+
+            var response = await _client.PutAsJsonAsync(
+                $"/api/transactions/{Guid.NewGuid()}/category", new CategorizeTransactionRequest(categoryId));
+
+            response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+            var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+            problem!.Status.Should().Be((int)HttpStatusCode.NotFound);
+        }
+
+        [Fact]
+        public async Task Categorize_WithUnknownCategoryId_Returns404ProblemDetails()
+        {
+            var accountId = await CreatePersistedAccountAsync();
+            var transactionId = await CreatePersistedTransactionAsync(accountId);
+
+            var response = await _client.PutAsJsonAsync(
+                $"/api/transactions/{transactionId}/category", new CategorizeTransactionRequest(Guid.NewGuid()));
+
+            response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+            var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+            problem!.Status.Should().Be((int)HttpStatusCode.NotFound);
+        }
+
+        [Fact]
+        public async Task GetTransactions_ForAccountWithTransactions_ReturnsThemMostRecentFirst()
+        {
+            var accountId = await CreatePersistedAccountAsync();
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            await CreatePersistedTransactionAsync(accountId, today.AddDays(-5));
+            await CreatePersistedTransactionAsync(accountId, today);
+
+            var response = await _client.GetAsync($"/api/transactions?accountId={accountId}");
+
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            var results = await response.Content.ReadFromJsonAsync<List<TransactionResponse>>(JsonOptions);
+            results.Should().HaveCount(2);
+            results![0].OccurredOn.Should().Be(today);
+            results[1].OccurredOn.Should().Be(today.AddDays(-5));
+        }
+
+        [Fact]
+        public async Task GetTransactions_WithDateRange_ExcludesTransactionsOutsideIt()
+        {
+            var accountId = await CreatePersistedAccountAsync();
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            await CreatePersistedTransactionAsync(accountId, today.AddDays(-30));
+            await CreatePersistedTransactionAsync(accountId, today);
+
+            var response = await _client.GetAsync(
+                $"/api/transactions?accountId={accountId}&from={today.AddDays(-1):yyyy-MM-dd}&to={today:yyyy-MM-dd}");
+
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            var results = await response.Content.ReadFromJsonAsync<List<TransactionResponse>>(JsonOptions);
+            results.Should().ContainSingle();
+            results![0].OccurredOn.Should().Be(today);
+        }
+
+        [Fact]
+        public async Task GetTransactions_WithUnknownAccountId_Returns404ProblemDetails()
+        {
+            var response = await _client.GetAsync($"/api/transactions?accountId={Guid.NewGuid()}");
+
+            response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+            var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+            problem!.Status.Should().Be((int)HttpStatusCode.NotFound);
+        }
+
+        [Fact]
+        public async Task GetTransactions_WithoutAccountId_Returns400ProblemDetails()
+        {
+            var response = await _client.GetAsync("/api/transactions");
+
+            response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+            var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+            problem!.Status.Should().Be((int)HttpStatusCode.BadRequest);
         }
     }
 }
