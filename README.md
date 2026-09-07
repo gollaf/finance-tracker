@@ -53,7 +53,8 @@ docker compose up
 ```
 
 This starts the API, PostgreSQL, RabbitMQ, and the Worker service.
-API docs available at `http://localhost:5000/swagger` once running.
+Interactive API docs (Scalar, Development only) are available at
+`http://localhost:5000/scalar/v1` once running.
 
 ## Running Tests
 
@@ -78,6 +79,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0003 — EF Core persistence mapping for strongly-typed IDs and value objects](./docs/adr/0003-ef-core-persistence-mapping.md)
 - [0004 — API layer: MVC controllers and a fixed Result-to-HTTP mapping](./docs/adr/0004-api-mvc-controllers-result-mapping.md)
 - [0005 — Cross-aggregate foreign keys without navigation properties](./docs/adr/0005-cross-aggregate-foreign-keys.md)
+- [0006 — CSV import parsing lives in the API layer](./docs/adr/0006-csv-import-parsing-in-api-layer.md)
 
 ## License
 
