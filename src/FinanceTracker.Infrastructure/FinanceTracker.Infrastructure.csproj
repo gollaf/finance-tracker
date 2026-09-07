@@ -7,11 +7,24 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!--
+      Microsoft.EntityFrameworkCore and Microsoft.EntityFrameworkCore.Relational
+      below are pinned explicitly, not just left to whatever Npgsql.EntityFrameworkCore.PostgreSql
+      pulls in transitively. Microsoft.EntityFrameworkCore.Design just below has
+      PrivateAssets="all", which hides its own (higher) version requirements for both
+      packages from every project that references this one, so without these two
+      explicit lines, downstream projects (Api, test projects) resolve a lower version
+      than this project actually compiles against, and the app throws
+      FileNotFoundException at runtime the first time it touches EF Core, since the
+      exact assembly version this project's DLL asks for was never copied to their
+      output folder. Do not remove either line as "redundant" without re-checking this.
+    -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.11" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.11" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSql" Version="10.0.3" />
   </ItemGroup>
 
