@@ -52,7 +52,7 @@ Clean Architecture, dependency rule points inward:
 
 - [x] **Phase 1** — Domain & Application core (entities, use cases, unit tests)
 - [x] **Phase 2** — Infrastructure & API (EF Core, Postgres, Testcontainers, Scalar/OpenAPI)
-- [ ] **Phase 3** — Dockerize (Dockerfile, docker-compose)
+- [x] **Phase 3** — Dockerize (Dockerfile, docker-compose)
 - [ ] **Phase 4** — AI feature, synchronous first version
 - [ ] **Phase 5** — Async processing via RabbitMQ (refactor AI + CSV import)
 - [ ] **Phase 6** — Kubernetes locally (multi-service: API, Worker, RabbitMQ, Postgres)
