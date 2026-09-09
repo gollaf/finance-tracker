@@ -2,6 +2,7 @@ using FinanceTracker.Application;
 using FinanceTracker.Infrastructure;
 using FinanceTracker.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 using System.Text.Json.Serialization;
@@ -47,6 +48,13 @@ builder.Services.AddProblemDetails(options =>
     };
 });
 
+// Two separate health checks, not one, because they answer two different
+// questions a container orchestrator asks -- see ADR 0009. The database
+// check is tagged "ready" so it can be selected independently below; it
+// is never wired into the liveness endpoint.
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<FinanceTrackerDbContext>("database", tags: ["ready"]);
+
 var app = builder.Build();
 
 // Applies any pending EF Core migration against whatever database
@@ -72,6 +80,22 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
     app.MapScalarApiReference();
 }
+
+// Liveness: is this process itself still able to handle a request at
+// all? Predicate = _ => false runs zero registered checks, so this can
+// never fail because a dependency (the database) is unhappy -- exactly
+// what a Kubernetes liveness probe should ask, per ADR 0009.
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = _ => false
+});
+
+// Readiness: can this instance currently serve real traffic? Runs only
+// the checks tagged "ready" -- today, just the database.
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+});
 
 app.MapControllers();
 
