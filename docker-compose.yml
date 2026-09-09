@@ -1,0 +1,45 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: financetracker
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    # docker compose waits for this to report healthy -- not just "the
+    # container exists" -- before starting `api`. Without it, `api` would
+    # start immediately alongside Postgres and try to connect before
+    # Postgres has finished its own startup, since the app has no
+    # connection-retry logic of its own.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d financetracker"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: src/FinanceTracker.Api/Dockerfile
+    environment:
+      # Development here (not Production) is what makes Scalar/OpenAPI
+      # available at /scalar/v1 -- see Program.cs's app.Environment.IsDevelopment()
+      # check. This compose file is for local development; a real deploy
+      # (Phase 8) will need its own environment configuration.
+      ASPNETCORE_ENVIRONMENT: Development
+      # "postgres" here is not a placeholder -- it's the other service's
+      # name above, resolved via Docker's built-in DNS on the network
+      # compose creates automatically for this file. See the write-up for
+      # why this only works container-to-container, not from your host.
+      ConnectionStrings__FinanceTracker: "Host=postgres;Port=5432;Database=financetracker;Username=postgres;Password=postgres"
+    ports:
+      - "5000:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
