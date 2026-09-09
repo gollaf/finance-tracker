@@ -52,9 +52,11 @@ cd finance-tracker
 docker compose up
 ```
 
-This starts the API, PostgreSQL, RabbitMQ, and the Worker service.
-Interactive API docs (Scalar, Development only) are available at
-`http://localhost:5000/scalar/v1` once running.
+This starts the API and PostgreSQL (RabbitMQ and a Worker service join
+in later phases -- see `PROJECT_PLAN.md`). Interactive API docs (Scalar,
+Development only) are available at `http://localhost:5000/scalar/v1`
+once running, and liveness/readiness health endpoints at `/health/live`
+and `/health/ready`.
 
 ## Running Tests
 
@@ -82,6 +84,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0006 — CSV import parsing lives in the API layer](./docs/adr/0006-csv-import-parsing-in-api-layer.md)
 - [0007 — Dockerfile layout, multi-stage build, and base images](./docs/adr/0007-dockerfile-multistage-build-and-base-images.md)
 - [0008 — docker-compose topology and startup migrations](./docs/adr/0008-compose-topology-and-startup-migrations.md)
+- [0009 — Separate liveness and readiness health endpoints](./docs/adr/0009-liveness-and-readiness-health-endpoints.md)
 
 ## License
 
