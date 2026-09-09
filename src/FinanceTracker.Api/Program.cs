@@ -1,6 +1,8 @@
 using FinanceTracker.Application;
 using FinanceTracker.Infrastructure;
+using FinanceTracker.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 using System.Text.Json.Serialization;
 
@@ -46,6 +48,18 @@ builder.Services.AddProblemDetails(options =>
 });
 
 var app = builder.Build();
+
+// Applies any pending EF Core migration against whatever database
+// ConnectionStrings:FinanceTracker points at, every time this host starts.
+// This is what lets `docker compose up` produce a fully migrated database
+// with zero manual steps -- see ADR 0008 for the full reasoning, and the
+// caveat it records for once more than one instance of this API is ever
+// running at the same time (Phase 6, Kubernetes).
+using (var migrationScope = app.Services.CreateScope())
+{
+    var dbContext = migrationScope.ServiceProvider.GetRequiredService<FinanceTrackerDbContext>();
+    await dbContext.Database.MigrateAsync();
+}
 
 app.UseExceptionHandler();
 
