@@ -80,6 +80,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0004 — API layer: MVC controllers and a fixed Result-to-HTTP mapping](./docs/adr/0004-api-mvc-controllers-result-mapping.md)
 - [0005 — Cross-aggregate foreign keys without navigation properties](./docs/adr/0005-cross-aggregate-foreign-keys.md)
 - [0006 — CSV import parsing lives in the API layer](./docs/adr/0006-csv-import-parsing-in-api-layer.md)
+- [0007 — Dockerfile layout, multi-stage build, and base images](./docs/adr/0007-dockerfile-multistage-build-and-base-images.md)
 
 ## License
 

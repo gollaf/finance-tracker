@@ -1,0 +1,24 @@
+# Build output -- the Dockerfile always builds fresh inside its own build
+# stage. Host-built binaries here would either be wasted build context or,
+# worse, get copied in by mistake instead of the freshly-built ones.
+**/bin/
+**/obj/
+
+# IDE / editor state -- irrelevant to building or running the image.
+**/.vs/
+**/.idea/
+.vscode/
+
+# Version control metadata -- never needed inside an image.
+.git/
+.gitignore
+.gitattributes
+
+# Not needed to build or run the Api image. Keeping these out of the
+# build context also keeps `docker build`'s context upload small and fast.
+tests/
+docs/
+*.md
+.github/
+.editorconfig
+.config/
