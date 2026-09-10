@@ -67,6 +67,32 @@ dotnet test
 Integration tests spin up a real PostgreSQL instance via Testcontainers —
 Docker must be running.
 
+## AI-Powered Spending Insights
+
+`GET /api/transactions/spending-insights?accountId=...&year=...&month=...`
+computes this-month-vs-prior-3-month-average spending per category, then
+asks an LLM (Groq's free-tier API, OpenAI-compatible) to describe the
+numbers in plain language. The AI only ever rewords numbers the API already
+computed — it never invents its own — and a failed or unconfigured AI call
+degrades gracefully to a templated narrative instead of failing the
+request. See [ADR 0010](./docs/adr/0010-ai-insights-provider-and-integration-design.md)
+for the full design rationale.
+
+To enable real AI narratives locally, set a free Groq API key
+(console.groq.com, no credit card required):
+
+```bash
+# dotnet run (from src/FinanceTracker.Api)
+dotnet user-secrets set "Groq:ApiKey" "gsk_..."
+
+# docker compose up — put this in a gitignored .env file at the repo root
+GROQ_API_KEY=gsk_...
+```
+
+Without a key, the endpoint still works — `narrativeGeneratedByAi` is
+`false` and `narrative` is a templated fallback built from the same
+per-category numbers.
+
 ## Roadmap
 
 See [`PROJECT_PLAN.md`](./PROJECT_PLAN.md) for the full phase-by-phase plan
@@ -85,6 +111,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0007 — Dockerfile layout, multi-stage build, and base images](./docs/adr/0007-dockerfile-multistage-build-and-base-images.md)
 - [0008 — docker-compose topology and startup migrations](./docs/adr/0008-compose-topology-and-startup-migrations.md)
 - [0009 — Separate liveness and readiness health endpoints](./docs/adr/0009-liveness-and-readiness-health-endpoints.md)
+- [0010 — AI insights provider and integration design](./docs/adr/0010-ai-insights-provider-and-integration-design.md)
 
 ## License
 
