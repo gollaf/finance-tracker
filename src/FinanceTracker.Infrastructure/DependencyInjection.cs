@@ -9,6 +9,7 @@ using FinanceTracker.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace FinanceTracker.Infrastructure
 {
@@ -43,12 +44,27 @@ namespace FinanceTracker.Infrastructure
             services.AddScoped<IBudgetRepository, BudgetRepository>();
             services.AddScoped<ITransactionRepository, TransactionRepository>();
 
-            // Placeholder until Phase 4 Piece 2 registers GroqInsightsGenerator
-            // instead -- see NotConfiguredInsightsGenerator's own doc comment
-            // for why a registration has to exist here at all. Singleton, not
-            // Scoped: it holds no state and has no per-request dependency like
-            // the repositories' DbContext does.
-            services.AddSingleton<IInsightsGenerator, NotConfiguredInsightsGenerator>();
+            // GroqOptions.ApiKey is intentionally allowed to bind empty --
+            // GroqInsightsGenerator treats a missing key as a non-fatal
+            // Result.Failure, not a startup crash. See
+            // docs/adr/0010-ai-insights-provider-and-integration-design.md.
+            services.AddOptions<GroqOptions>()
+                .Bind(configuration.GetSection(GroqOptions.SectionName));
+
+            // A typed HttpClient, not a bare "new HttpClient()" inside
+            // GroqInsightsGenerator: AddHttpClient hands out pooled,
+            // reused HttpMessageHandlers instead of one per instance,
+            // which avoids the socket-exhaustion problem a
+            // manually-constructed HttpClient is famous for under load.
+            // The configure callback reads GroqOptions back out of the
+            // same IServiceProvider building this client, so
+            // TimeoutSeconds only has to be set in one place.
+            services.AddHttpClient<IInsightsGenerator, GroqInsightsGenerator>((serviceProvider, client) =>
+            {
+                var groqOptions = serviceProvider.GetRequiredService<IOptions<GroqOptions>>().Value;
+                client.BaseAddress = new Uri("https://api.groq.com/");
+                client.Timeout = TimeSpan.FromSeconds(groqOptions.TimeoutSeconds);
+            });
 
             return services;
         }

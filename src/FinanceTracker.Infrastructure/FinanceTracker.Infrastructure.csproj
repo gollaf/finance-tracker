@@ -17,7 +17,7 @@
       than this project actually compiles against, and the app throws
       FileNotFoundException at runtime the first time it touches EF Core, since the
       exact assembly version this project's DLL asks for was never copied to their
-      output folder. Do not remove either line as "redundant" without re-checking this.
+      output folder. Do not remove either line as "redundant" without rechecking this.
     -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11">
       <PrivateAssets>all</PrivateAssets>
@@ -26,6 +26,17 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.11" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.11" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSql" Version="10.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Backs GroqInsightsGenerator (src/FinanceTracker.Infrastructure/Ai/)  see
+         docs/adr/0010-ai-insights-provider-and-integration-design.md. Pinned to
+         10.0.11 to match every other Microsoft.Extensions.* / EF Core package in
+         this project, all on the same .NET 10 patch train. -->
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.11" />
+    <PackageReference Include="System.Net.Http.Json" Version="10.0.11" />
   </ItemGroup>
 
   <ItemGroup>
