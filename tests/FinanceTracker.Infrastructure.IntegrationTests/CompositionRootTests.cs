@@ -5,6 +5,7 @@ using FinanceTracker.Application.Categories;
 using FinanceTracker.Application.Categorization;
 using FinanceTracker.Application.Transactions;
 using FinanceTracker.Infrastructure;
+using FinanceTracker.Infrastructure.Ai;
 using FinanceTracker.Infrastructure.Persistence.Repositories;
 using FluentAssertions;
 using MediatR;
@@ -64,6 +65,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests
         [InlineData(typeof(ICategorizationRuleRepository), typeof(CategorizationRuleRepository))]
         [InlineData(typeof(IBudgetRepository), typeof(BudgetRepository))]
         [InlineData(typeof(ITransactionRepository), typeof(TransactionRepository))]
+        [InlineData(typeof(IInsightsGenerator), typeof(NotConfiguredInsightsGenerator))]
         public void ServiceProvider_ResolvesEachRepository_ToItsInfrastructureImplementation(
             Type serviceType, Type expectedImplementationType)
         {
