@@ -3,6 +3,7 @@ using FinanceTracker.Application.Budgets;
 using FinanceTracker.Application.Categories;
 using FinanceTracker.Application.Categorization;
 using FinanceTracker.Application.Transactions;
+using FinanceTracker.Infrastructure.Ai;
 using FinanceTracker.Infrastructure.Persistence;
 using FinanceTracker.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -41,6 +42,13 @@ namespace FinanceTracker.Infrastructure
             services.AddScoped<ICategorizationRuleRepository, CategorizationRuleRepository>();
             services.AddScoped<IBudgetRepository, BudgetRepository>();
             services.AddScoped<ITransactionRepository, TransactionRepository>();
+
+            // Placeholder until Phase 4 Piece 2 registers GroqInsightsGenerator
+            // instead -- see NotConfiguredInsightsGenerator's own doc comment
+            // for why a registration has to exist here at all. Singleton, not
+            // Scoped: it holds no state and has no per-request dependency like
+            // the repositories' DbContext does.
+            services.AddSingleton<IInsightsGenerator, NotConfiguredInsightsGenerator>();
 
             return services;
         }
