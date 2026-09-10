@@ -2,6 +2,7 @@ using FinanceTracker.Api.Common;
 using FinanceTracker.Application.Transactions.AddTransaction;
 using FinanceTracker.Application.Transactions.CategorizeTransaction;
 using FinanceTracker.Application.Transactions.DeleteTransaction;
+using FinanceTracker.Application.Transactions.GetSpendingInsights;
 using FinanceTracker.Application.Transactions.GetSpendingSummary;
 using FinanceTracker.Application.Transactions.GetTransactions;
 using FinanceTracker.Application.Transactions.ImportTransactionsFromCsv;
@@ -15,7 +16,8 @@ namespace FinanceTracker.Api.Transactions
     /// <summary>
     /// Covers Transaction's core lifecycle (Add, Update, Delete), assigning
     /// a Category, listing an Account's Transactions, summarizing its
-    /// spending by Category for a month, and importing a batch from CSV.
+    /// spending by Category for a month, generating AI spending insights,
+    /// and importing a batch from CSV.
     /// </summary>
     [ApiController]
     [Route("api/transactions")]
@@ -137,6 +139,38 @@ namespace FinanceTracker.Api.Transactions
             var response = result.Value
                 .Select(s => new CategorySpendingResponse(s.CategoryId?.Value, s.Total.Amount, s.Total.Currency))
                 .ToList();
+
+            return Ok(response);
+        }
+
+        // Same shape as spending-summary above (its own literal path
+        // segment, AccountId+Year+Month from the query string), extended
+        // with an AI-generated Narrative. This never fails because the AI
+        // call failed -- GetSpendingInsightsQueryHandler already degrades
+        // to a templated Narrative on that path and still returns
+        // Result.Success; see docs/adr/0010-ai-insights-provider-and-integration-design.md.
+        [HttpGet("spending-insights")]
+        public async Task<IActionResult> GetSpendingInsights(
+            [FromQuery] Guid accountId, [FromQuery] int year, [FromQuery] int month, CancellationToken cancellationToken)
+        {
+            var query = new GetSpendingInsightsQuery(new AccountId(accountId), year, month);
+            var result = await _sender.Send(query, cancellationToken);
+
+            if (result.IsFailure)
+                return result.ToActionResult();
+
+            var response = new SpendingInsightsResponse(
+                result.Value.Trends
+                    .Select(t => new CategoryTrendResponse(
+                        t.CategoryId?.Value,
+                        t.CategoryName,
+                        t.CurrentMonthTotal.Amount,
+                        t.PriorAverageTotal.Amount,
+                        t.CurrentMonthTotal.Currency,
+                        t.PercentChange))
+                    .ToList(),
+                result.Value.Narrative,
+                result.Value.NarrativeGeneratedByAi);
 
             return Ok(response);
         }

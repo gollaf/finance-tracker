@@ -418,6 +418,77 @@ namespace FinanceTracker.Api.IntegrationTests.Transactions
         }
 
         [Fact]
+        public async Task GetSpendingInsights_WithNoExpenseHistory_ReturnsCannedMessageAndEmptyTrends()
+        {
+            var accountId = await CreatePersistedAccountAsync();
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+            var response = await _client.GetAsync(
+                $"/api/transactions/spending-insights?accountId={accountId}&year={today.Year}&month={today.Month}");
+
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            var body = await response.Content.ReadFromJsonAsync<SpendingInsightsResponse>();
+            body!.Trends.Should().BeEmpty();
+            body.NarrativeGeneratedByAi.Should().BeFalse();
+            body.Narrative.Should().Contain("enough history");
+        }
+
+        [Fact]
+        public async Task GetSpendingInsights_WithExpenseTransaction_ReturnsAiNarrativeFromStub()
+        {
+            var accountId = await CreatePersistedAccountAsync();
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            await CreatePersistedTransactionAsync(accountId, today);
+
+            var response = await _client.GetAsync(
+                $"/api/transactions/spending-insights?accountId={accountId}&year={today.Year}&month={today.Month}");
+
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            var body = await response.Content.ReadFromJsonAsync<SpendingInsightsResponse>();
+            body!.Trends.Should().ContainSingle();
+            body.Trends[0].CategoryName.Should().Be("Uncategorized");
+            body.Trends[0].CurrentMonthTotal.Should().Be(25.00m);
+
+            // Confirms CustomWebApplicationFactory's ConfigureTestServices
+            // override actually took effect -- if it hadn't, this would be
+            // trying to reach the real Groq API with no API key configured
+            // and would fall back to a templated Narrative instead, per
+            // GetSpendingInsightsQueryHandler.
+            body.NarrativeGeneratedByAi.Should().BeTrue();
+            body.Narrative.Should().Be(StubInsightsGenerator.FixedNarrative);
+        }
+
+        [Fact]
+        public async Task GetSpendingInsights_WithUnknownAccountId_Returns404ProblemDetails()
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+            var response = await _client.GetAsync(
+                $"/api/transactions/spending-insights?accountId={Guid.NewGuid()}&year={today.Year}&month={today.Month}");
+
+            response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+            var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+            problem!.Status.Should().Be((int)HttpStatusCode.NotFound);
+        }
+
+        [Fact]
+        public async Task GetSpendingInsights_WithInvalidMonth_Returns400ProblemDetails()
+        {
+            var accountId = await CreatePersistedAccountAsync();
+
+            var response = await _client.GetAsync(
+                $"/api/transactions/spending-insights?accountId={accountId}&year=2026&month=13");
+
+            response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+            var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+            problem!.Status.Should().Be((int)HttpStatusCode.BadRequest);
+        }
+
+        [Fact]
         public async Task Import_WithValidCsv_ImportsAllRowsAndReturns200()
         {
             var accountId = await CreatePersistedAccountAsync();

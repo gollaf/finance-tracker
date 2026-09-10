@@ -35,6 +35,16 @@ services:
       # compose creates automatically for this file. See the write-up for
       # why this only works container-to-container, not from your host.
       ConnectionStrings__FinanceTracker: "Host=postgres;Port=5432;Database=financetracker;Username=postgres;Password=postgres"
+      # Unlike the Postgres credentials above, a Groq API key is a real
+      # secret tied to a personal account and free-tier quota -- it can't
+      # be hardcoded here the same way, even as a "local-only default"
+      # (see docs/adr/0010-ai-insights-provider-and-integration-design.md).
+      # ${GROQ_API_KEY:-} reads it from your shell environment, or from a
+      # gitignored .env file in this same directory (docker compose loads
+      # one automatically) -- e.g. a line reading GROQ_API_KEY=gsk_...
+      # Left unset, GetSpendingInsights still works: it just falls back to
+      # a templated, non-AI narrative instead of erroring.
+      Groq__ApiKey: ${GROQ_API_KEY:-}
     ports:
       - "5000:8080"
     depends_on:

@@ -1,7 +1,11 @@
+using FinanceTracker.Application.Transactions;
 using FinanceTracker.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Testcontainers.PostgreSql;
 
 namespace FinanceTracker.Api.IntegrationTests
@@ -49,6 +53,26 @@ namespace FinanceTracker.Api.IntegrationTests
             using var scope = Services.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<FinanceTrackerDbContext>();
             await context.Database.MigrateAsync();
+        }
+
+        // Unlike the connection string above, this doesn't need the
+        // environment-variable workaround -- it doesn't matter that
+        // AddInfrastructure() already registered the real
+        // GroqInsightsGenerator by the time this runs; ConfigureTestServices
+        // is applied to the same IServiceCollection afterward, and a later
+        // registration for the same interface simply replaces the earlier
+        // one (TryAddSingleton wouldn't, which is why this uses the plain
+        // Add call via RemoveAll + AddSingleton instead). See
+        // StubInsightsGenerator's own doc comment for why every
+        // Api.IntegrationTests test needs this instead of hitting Groq for
+        // real.
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IInsightsGenerator>();
+                services.AddSingleton<IInsightsGenerator, StubInsightsGenerator>();
+            });
         }
 
         async Task IAsyncLifetime.DisposeAsync()
