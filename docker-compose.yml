@@ -20,6 +20,41 @@ services:
       timeout: 5s
       retries: 10
 
+  rabbitmq:
+    # The -management variant adds a browser UI at http://localhost:15672
+    # for inspecting exchanges, queues, and messages by hand. See
+    # docs/adr/0011-async-messaging-rabbitmq-raw-client.md.
+    image: rabbitmq:4-management
+    # RabbitMQ names its data directory after its node name, which comes
+    # from the container's hostname. Without a fixed hostname, every
+    # recreated container gets a new random one and starts from an empty
+    # data directory, silently ignoring whatever is in the volume below.
+    hostname: rabbitmq
+    environment:
+      # Explicit credentials instead of the built-in "guest" user, which
+      # RabbitMQ itself only allows to connect from localhost -- this
+      # image relaxes that, but no other broker we'd deploy to would.
+      # Plaintext for the same reason as the Postgres credentials above:
+      # this broker is only reachable on your own machine (ADR 0008).
+      RABBITMQ_DEFAULT_USER: financetracker
+      RABBITMQ_DEFAULT_PASS: financetracker
+    ports:
+      - "5672:5672"   # AMQP -- what the app's client library connects to
+      - "15672:15672" # management UI
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    # Same purpose as the postgres healthcheck: lets a service that needs
+    # the broker wait for it to actually accept connections, not just for
+    # the container to exist. check_port_connectivity (rather than the
+    # lighter "ping") is what verifies that: ping only proves the node's
+    # runtime responds, which can happen before the AMQP listener that
+    # clients connect to is open.
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   api:
     build:
       context: .
@@ -53,3 +88,4 @@ services:
 
 volumes:
   postgres-data:
+  rabbitmq-data:
