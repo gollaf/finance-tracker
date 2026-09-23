@@ -86,6 +86,28 @@ services:
       postgres:
         condition: service_healthy
 
+  worker:
+    build:
+      context: .
+      dockerfile: src/FinanceTracker.Worker/Dockerfile
+    environment:
+      # A non-web .NET host reads DOTNET_ENVIRONMENT, not
+      # ASPNETCORE_ENVIRONMENT like the api above -- and falls back to
+      # Production when it's unset.
+      DOTNET_ENVIRONMENT: Development
+      # Same connection string as the api: AddInfrastructure() refuses to
+      # start without one. "postgres" is the service name, resolved by
+      # compose's built-in DNS -- "localhost" here would mean this worker
+      # container itself.
+      ConnectionStrings__FinanceTracker: "Host=postgres;Port=5432;Database=financetracker;Username=postgres;Password=postgres"
+    # No "ports:" -- nothing connects to the worker; it only connects out,
+    # to postgres and rabbitmq.
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
 volumes:
   postgres-data:
   rabbitmq-data:

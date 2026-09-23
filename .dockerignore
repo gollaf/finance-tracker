@@ -14,7 +14,7 @@
 .gitignore
 .gitattributes
 
-# Not needed to build or run the Api image. Keeping these out of the
+# Not needed to build or run the Api or Worker image. Keeping these out of the
 # build context also keeps `docker build`'s context upload small and fast.
 tests/
 docs/
