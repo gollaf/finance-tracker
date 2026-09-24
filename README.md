@@ -115,6 +115,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0011 — Asynchronous messaging: RabbitMQ with the raw RabbitMQ.Client library](./docs/adr/0011-async-messaging-rabbitmq-raw-client.md)
 - [0012 — RabbitMQ topology and delivery guarantees](./docs/adr/0012-rabbitmq-topology-and-delivery-guarantees.md)
 - [0013 — Transactional outbox](./docs/adr/0013-transactional-outbox.md)
+- [0014 — AI categorization of uncategorized transactions](./docs/adr/0014-ai-transaction-categorization.md)
 
 ## License
 
