@@ -3,10 +3,12 @@ using FinanceTracker.Application.Accounts;
 using FinanceTracker.Application.Budgets;
 using FinanceTracker.Application.Categories;
 using FinanceTracker.Application.Categorization;
+using FinanceTracker.Application.Common.IntegrationEvents;
 using FinanceTracker.Application.Transactions;
 using FinanceTracker.Infrastructure;
 using FinanceTracker.Infrastructure.Ai;
 using FinanceTracker.Infrastructure.Messaging;
+using FinanceTracker.Infrastructure.Outbox;
 using FinanceTracker.Infrastructure.Persistence.Repositories;
 using FluentAssertions;
 using MediatR;
@@ -68,6 +70,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests
         [InlineData(typeof(IBudgetRepository), typeof(BudgetRepository))]
         [InlineData(typeof(ITransactionRepository), typeof(TransactionRepository))]
         [InlineData(typeof(IInsightsGenerator), typeof(GroqInsightsGenerator))]
+        [InlineData(typeof(IOutbox), typeof(EfCoreOutbox))]
         public void ServiceProvider_ResolvesEachRepository_ToItsInfrastructureImplementation(
             Type serviceType, Type expectedImplementationType)
         {
@@ -98,7 +101,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests
         /// this runs with no broker at all.
         /// </summary>
         [Fact]
-        public async Task AddRabbitMqMessaging_RegistersPublisherAndTopologyInitializer()
+        public async Task AddRabbitMqMessaging_RegistersPublisherTopologyInitializerAndOutboxRelay()
         {
             var configuration = new ConfigurationBuilder()
                 .AddInMemoryCollection(new Dictionary<string, string?>
@@ -121,6 +124,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests
             provider.GetService<IMessagePublisher>().Should().BeOfType<RabbitMqPublisher>();
             provider.GetService<RabbitMqConnectionProvider>().Should().NotBeNull();
             provider.GetServices<IHostedService>().Should().ContainSingle(s => s is RabbitMqTopologyInitializer);
+            provider.GetServices<IHostedService>().Should().ContainSingle(s => s is OutboxRelay);
         }
     }
 }

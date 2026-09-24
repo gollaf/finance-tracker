@@ -2,9 +2,11 @@ using FinanceTracker.Application.Accounts;
 using FinanceTracker.Application.Budgets;
 using FinanceTracker.Application.Categories;
 using FinanceTracker.Application.Categorization;
+using FinanceTracker.Application.Common.IntegrationEvents;
 using FinanceTracker.Application.Transactions;
 using FinanceTracker.Infrastructure.Ai;
 using FinanceTracker.Infrastructure.Messaging;
+using FinanceTracker.Infrastructure.Outbox;
 using FinanceTracker.Infrastructure.Persistence;
 using FinanceTracker.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -45,6 +47,12 @@ namespace FinanceTracker.Infrastructure
             services.AddScoped<IBudgetRepository, BudgetRepository>();
             services.AddScoped<ITransactionRepository, TransactionRepository>();
 
+            // Scoped for the same reason as the repositories: it has to
+            // share the one FinanceTrackerDbContext of the current request
+            // (or message) with them -- that shared context is what makes
+            // an outbox row and the change it describes commit together.
+            services.AddScoped<IOutbox, EfCoreOutbox>();
+
             // GroqOptions.ApiKey is intentionally allowed to bind empty --
             // GroqInsightsGenerator treats a missing key as a non-fatal
             // Result.Failure, not a startup crash. See
@@ -72,7 +80,10 @@ namespace FinanceTracker.Infrastructure
 
         /// <summary>
         /// Registers the RabbitMQ plumbing: one shared connection, the
-        /// publisher, and a startup step that declares the shared exchanges.
+        /// publisher, a startup step that declares the shared exchanges, and
+        /// the OutboxRelay that publishes stored integration events. The
+        /// relay reads the outbox through FinanceTrackerDbContext, so this
+        /// must be called together with AddInfrastructure.
         /// Separate from AddInfrastructure on purpose -- only a process that
         /// actually talks to the broker (the Worker) calls this. The Api
         /// never does: it only records events in the database, and never
@@ -99,6 +110,7 @@ namespace FinanceTracker.Infrastructure
             services.AddSingleton<IMessagePublisher, RabbitMqPublisher>();
 
             services.AddHostedService<RabbitMqTopologyInitializer>();
+            services.AddHostedService<OutboxRelay>();
 
             return services;
         }
