@@ -11,6 +11,12 @@ namespace FinanceTracker.Application.Categories
         /// <summary>Backs the name-uniqueness rule Category itself can't enforce (see docs/domain-model.md).</summary>
         Task<bool> ExistsWithNameAsync(string name, CancellationToken cancellationToken = default);
 
+        /// <summary>
+        /// Every Category, ordered by name. Feeds SuggestCategoryForTransaction,
+        /// which offers the AI exactly this list to choose from.
+        /// </summary>
+        Task<IReadOnlyList<Category>> GetAllAsync(CancellationToken cancellationToken = default);
+
         Task AddAsync(Category category, CancellationToken cancellationToken = default);
     }
 }

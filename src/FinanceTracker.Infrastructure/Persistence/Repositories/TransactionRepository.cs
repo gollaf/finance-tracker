@@ -45,6 +45,30 @@ namespace FinanceTracker.Infrastructure.Persistence.Repositories
             await _context.SaveChangesAsync(cancellationToken);
         }
 
+        // ExecuteUpdateAsync sends one UPDATE ... WHERE straight to the
+        // database -- no loading, no change tracking, no SaveChangesAsync:
+        //   UPDATE "Transactions" SET "CategoryId" = @categoryId
+        //   WHERE "Id" = @transactionId AND "CategoryId" IS NULL
+        // The "still uncategorized?" check and the write happen in the same
+        // statement, so nothing can change the row in between. Zero rows
+        // affected means it was already categorized (or no longer exists).
+        //
+        // Because it bypasses the change tracker, a Transaction instance
+        // this DbContext already has loaded is NOT updated in memory -- load
+        // it again (from a new DbContext, or with AsNoTracking) to see the
+        // new value.
+        public async Task<bool> TrySetCategoryIfUncategorizedAsync(
+            TransactionId transactionId, CategoryId categoryId, CancellationToken cancellationToken = default)
+        {
+            var rowsAffected = await _context.Transactions
+                .Where(t => t.Id == transactionId && t.CategoryId == null)
+                .ExecuteUpdateAsync(
+                    setters => setters.SetProperty(t => t.CategoryId, (CategoryId?)categoryId),
+                    cancellationToken);
+
+            return rowsAffected == 1;
+        }
+
         public async Task DeleteAsync(Transaction transaction, CancellationToken cancellationToken = default)
         {
             _context.Transactions.Remove(transaction);

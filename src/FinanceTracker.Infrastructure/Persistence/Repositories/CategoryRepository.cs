@@ -28,6 +28,11 @@ namespace FinanceTracker.Infrastructure.Persistence.Repositories
         public Task<bool> ExistsWithNameAsync(string name, CancellationToken cancellationToken = default) =>
             _context.Categories.AnyAsync(c => EF.Functions.ILike(c.Name, name), cancellationToken);
 
+        public async Task<IReadOnlyList<Category>> GetAllAsync(CancellationToken cancellationToken = default) =>
+            await _context.Categories
+                .OrderBy(c => c.Name)
+                .ToListAsync(cancellationToken);
+
         public async Task AddAsync(Category category, CancellationToken cancellationToken = default)
         {
             await _context.Categories.AddAsync(category, cancellationToken);
