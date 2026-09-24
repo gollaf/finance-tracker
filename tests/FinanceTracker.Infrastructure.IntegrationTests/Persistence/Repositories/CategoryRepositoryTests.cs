@@ -96,6 +96,18 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         }
 
         [Fact]
+        public async Task GetAllAsync_ReturnsEveryCategoryOrderedByName()
+        {
+            await _repository.AddAsync(Category.Create("Transport"), CancellationToken.None);
+            await _repository.AddAsync(Category.Create("Dining"), CancellationToken.None);
+            await _repository.AddAsync(Category.Create("Groceries"), CancellationToken.None);
+
+            var all = await _repository.GetAllAsync(CancellationToken.None);
+
+            all.Select(c => c.Name).Should().Equal("Dining", "Groceries", "Transport");
+        }
+
+        [Fact]
         public async Task ExistsWithNameAsync_WithNoMatch_ReturnsFalse()
         {
             var exists = await _repository.ExistsWithNameAsync("Nonexistent", CancellationToken.None);

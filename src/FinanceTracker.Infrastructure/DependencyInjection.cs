@@ -75,6 +75,16 @@ namespace FinanceTracker.Infrastructure
                 client.Timeout = TimeSpan.FromSeconds(groqOptions.TimeoutSeconds);
             });
 
+            // Same Groq endpoint, options, and timeout as above; a separate
+            // typed client because it's a separate port. See
+            // docs/adr/0014-ai-transaction-categorization.md.
+            services.AddHttpClient<ICategorySuggester, GroqCategorySuggester>((serviceProvider, client) =>
+            {
+                var groqOptions = serviceProvider.GetRequiredService<IOptions<GroqOptions>>().Value;
+                client.BaseAddress = new Uri("https://api.groq.com/");
+                client.Timeout = TimeSpan.FromSeconds(groqOptions.TimeoutSeconds);
+            });
+
             return services;
         }
 

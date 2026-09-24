@@ -24,6 +24,16 @@ namespace FinanceTracker.Application.Transactions
 
         Task UpdateAsync(Transaction transaction, CancellationToken cancellationToken = default);
 
+        /// <summary>
+        /// Sets the Transaction's Category only if it is still uncategorized
+        /// at the moment of writing, as one atomic database operation, and
+        /// returns whether it did. Unlike load-modify-UpdateAsync, a Category
+        /// someone else assigned in the meantime (the user, manually) can
+        /// never be overwritten. See docs/adr/0014-ai-transaction-categorization.md.
+        /// </summary>
+        Task<bool> TrySetCategoryIfUncategorizedAsync(
+            TransactionId transactionId, CategoryId categoryId, CancellationToken cancellationToken = default);
+
         Task DeleteAsync(Transaction transaction, CancellationToken cancellationToken = default);
     }
 }

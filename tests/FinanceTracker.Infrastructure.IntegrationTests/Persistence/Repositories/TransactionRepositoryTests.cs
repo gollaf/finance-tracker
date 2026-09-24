@@ -161,6 +161,63 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         }
 
         [Fact]
+        public async Task TrySetCategoryIfUncategorizedAsync_OnUncategorizedTransaction_SetsItAndReturnsTrue()
+        {
+            var accountId = await CreatePersistedAccountAsync();
+            var categoryId = await CreatePersistedCategoryAsync();
+            var transaction = Transaction.Create(
+                accountId, Money.Create(10m, "USD"), TransactionType.Expense, "Coffee", new DateOnly(2026, 9, 1));
+            await _repository.AddAsync(transaction, CancellationToken.None);
+
+            var updated = await _repository.TrySetCategoryIfUncategorizedAsync(transaction.Id, categoryId, CancellationToken.None);
+
+            updated.Should().BeTrue();
+            (await LoadFreshAsync(transaction.Id))!.CategoryId.Should().Be(categoryId);
+        }
+
+        [Fact]
+        public async Task TrySetCategoryIfUncategorizedAsync_OnAlreadyCategorizedTransaction_LeavesItAndReturnsFalse()
+        {
+            var accountId = await CreatePersistedAccountAsync();
+            var chosenByUser = await CreatePersistedCategoryAsync("Dining");
+            var suggestedByAi = await CreatePersistedCategoryAsync("Groceries");
+            var transaction = Transaction.Create(
+                accountId, Money.Create(10m, "USD"), TransactionType.Expense, "Coffee", new DateOnly(2026, 9, 1), chosenByUser);
+            await _repository.AddAsync(transaction, CancellationToken.None);
+
+            var updated = await _repository.TrySetCategoryIfUncategorizedAsync(transaction.Id, suggestedByAi, CancellationToken.None);
+
+            updated.Should().BeFalse();
+            (await LoadFreshAsync(transaction.Id))!.CategoryId.Should().Be(chosenByUser);
+        }
+
+        [Fact]
+        public async Task TrySetCategoryIfUncategorizedAsync_OnUnknownTransaction_ReturnsFalse()
+        {
+            var categoryId = await CreatePersistedCategoryAsync();
+
+            var updated = await _repository.TrySetCategoryIfUncategorizedAsync(TransactionId.New(), categoryId, CancellationToken.None);
+
+            updated.Should().BeFalse();
+        }
+
+        /// <summary>
+        /// Reads through a brand-new DbContext. _context itself still has the
+        /// Transaction tracked from AddAsync, and ExecuteUpdateAsync doesn't
+        /// touch tracked instances -- reading back through _context would
+        /// return the stale in-memory copy, not what's in the database.
+        /// </summary>
+        private async Task<Transaction?> LoadFreshAsync(TransactionId id)
+        {
+            var options = new DbContextOptionsBuilder<FinanceTrackerDbContext>()
+                .UseNpgsql(_postgres.GetConnectionString())
+                .Options;
+
+            await using var freshContext = new FinanceTrackerDbContext(options);
+            return await new TransactionRepository(freshContext).GetByIdAsync(id, CancellationToken.None);
+        }
+
+        [Fact]
         public async Task DeleteAsync_RemovesTransaction()
         {
             var accountId = await CreatePersistedAccountAsync();
