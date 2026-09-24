@@ -2,7 +2,10 @@
 
 ## Status
 
-Accepted
+Accepted. Parsing in the API layer still applies; the synchronous
+import command it fed (`ImportTransactionsFromCsvCommand`) was replaced by
+the asynchronous import job in
+[ADR 0016](./0016-asynchronous-csv-import.md).
 
 ## Context
 

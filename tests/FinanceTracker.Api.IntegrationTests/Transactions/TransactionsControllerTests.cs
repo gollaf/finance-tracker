@@ -6,8 +6,10 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using FinanceTracker.Api.Accounts;
 using FinanceTracker.Api.Categories;
+using FinanceTracker.Api.Imports;
 using FinanceTracker.Api.Transactions;
 using FinanceTracker.Domain.Accounts;
+using FinanceTracker.Domain.Imports;
 using FinanceTracker.Domain.Transactions;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc;
@@ -488,8 +490,23 @@ namespace FinanceTracker.Api.IntegrationTests.Transactions
             problem!.Status.Should().Be((int)HttpStatusCode.BadRequest);
         }
 
+        // The import itself runs in the Worker (ADR 0016), and there is no
+        // Worker in these tests -- so they cover what the Api is responsible
+        // for: parsing the file, validating the request, creating a Pending
+        // job with the right rows and parse errors, and answering 202 with
+        // where to poll. Processing is covered by ProcessImportJobCommand's
+        // unit tests and the Worker's end-to-end tests.
+
+        private async Task<ImportJobResponse> GetImportJobAsync(Uri location)
+        {
+            var response = await _client.GetAsync(location);
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            return (await response.Content.ReadFromJsonAsync<ImportJobResponse>(JsonOptions))!;
+        }
+
         [Fact]
-        public async Task Import_WithValidCsv_ImportsAllRowsAndReturns200()
+        public async Task Import_WithValidCsv_Returns202AndAPendingJobToPoll()
         {
             var accountId = await CreatePersistedAccountAsync();
             const string csv =
@@ -499,15 +516,23 @@ namespace FinanceTracker.Api.IntegrationTests.Transactions
 
             var response = await _client.PostAsync("/api/transactions/import", BuildImportContent(accountId, csv));
 
-            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            response.StatusCode.Should().Be(HttpStatusCode.Accepted);
 
-            var result = await response.Content.ReadFromJsonAsync<ImportTransactionsResponse>();
-            result!.ImportedTransactionIds.Should().HaveCount(2);
-            result.Errors.Should().BeEmpty();
+            var accepted = await response.Content.ReadFromJsonAsync<StartImportResponse>();
+            response.Headers.Location.Should().NotBeNull();
+            response.Headers.Location!.OriginalString.Should().Be($"/api/imports/{accepted!.ImportJobId}");
+
+            var job = await GetImportJobAsync(response.Headers.Location!);
+            job.Id.Should().Be(accepted.ImportJobId);
+            job.AccountId.Should().Be(accountId);
+            job.Status.Should().Be(ImportJobStatus.Pending);
+            job.TotalRows.Should().Be(2);
+            job.ImportedCount.Should().Be(0);
+            job.Errors.Should().BeEmpty();
         }
 
         [Fact]
-        public async Task Import_WithOneMalformedRow_ImportsGoodRowsAndReportsTheBadOne()
+        public async Task Import_WithOneMalformedRow_RecordsItOnTheJobByLineNumber()
         {
             var accountId = await CreatePersistedAccountAsync();
             const string csv =
@@ -517,12 +542,11 @@ namespace FinanceTracker.Api.IntegrationTests.Transactions
 
             var response = await _client.PostAsync("/api/transactions/import", BuildImportContent(accountId, csv));
 
-            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            response.StatusCode.Should().Be(HttpStatusCode.Accepted);
 
-            var result = await response.Content.ReadFromJsonAsync<ImportTransactionsResponse>();
-            result!.ImportedTransactionIds.Should().HaveCount(1);
-            result.Errors.Should().ContainSingle();
-            result.Errors[0].RowNumber.Should().Be(3);
+            var job = await GetImportJobAsync(response.Headers.Location!);
+            job.TotalRows.Should().Be(1);
+            job.Errors.Should().ContainSingle().Which.RowNumber.Should().Be(3);
         }
 
         [Fact]
@@ -535,11 +559,11 @@ namespace FinanceTracker.Api.IntegrationTests.Transactions
 
             var response = await _client.PostAsync("/api/transactions/import", BuildImportContent(accountId, csv));
 
-            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            response.StatusCode.Should().Be(HttpStatusCode.Accepted);
 
-            var result = await response.Content.ReadFromJsonAsync<ImportTransactionsResponse>();
-            result!.ImportedTransactionIds.Should().ContainSingle();
-            result.Errors.Should().BeEmpty();
+            var job = await GetImportJobAsync(response.Headers.Location!);
+            job.TotalRows.Should().Be(1);
+            job.Errors.Should().BeEmpty();
         }
 
         [Fact]
@@ -569,18 +593,35 @@ namespace FinanceTracker.Api.IntegrationTests.Transactions
         }
 
         [Fact]
-        public async Task Import_WithOnlyMalformedRows_ReturnsThemAsErrorsWithoutFailingTheRequest()
+        public async Task Import_WithOnlyMalformedRows_Returns400WithTheParseErrors()
         {
             var accountId = await CreatePersistedAccountAsync();
             const string csv = "Amount,Type,Description,OccurredOn\nnot-a-number,Expense,Bad row,2026-01-10\n";
 
             var response = await _client.PostAsync("/api/transactions/import", BuildImportContent(accountId, csv));
 
-            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
 
-            var result = await response.Content.ReadFromJsonAsync<ImportTransactionsResponse>();
-            result!.ImportedTransactionIds.Should().BeEmpty();
-            result.Errors.Should().ContainSingle();
+            // The row errors travel as an extension member ("errors") of the
+            // ProblemDetails body -- read as raw JSON, since the ProblemDetails
+            // class itself only knows the standard members.
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            body.RootElement.GetProperty("title").GetString().Should().Be("Import.NoValidRows");
+
+            var errors = body.RootElement.GetProperty("errors");
+            errors.GetArrayLength().Should().Be(1);
+            errors[0].GetProperty("rowNumber").GetInt32().Should().Be(2);
+        }
+
+        [Fact]
+        public async Task GetImportJob_WithUnknownId_Returns404ProblemDetails()
+        {
+            var response = await _client.GetAsync($"/api/imports/{Guid.NewGuid()}");
+
+            response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+            var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+            problem!.Status.Should().Be((int)HttpStatusCode.NotFound);
         }
     }
 }
