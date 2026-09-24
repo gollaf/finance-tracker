@@ -9,4 +9,5 @@
   <Project Path="tests/FinanceTracker.Infrastructure.IntegrationTests/FinanceTracker.Infrastructure.IntegrationTests.csproj" Id="6401c1ab-d6ab-4c0e-bb9b-73e5832d21c3" />
   <Project Path="tests/FinanceTracker.Api.UnitTests/FinanceTracker.Api.UnitTests.csproj" Id="78011859-cab8-4509-9819-018de5489e53" />
   <Project Path="tests/FinanceTracker.Api.IntegrationTests/FinanceTracker.Api.IntegrationTests.csproj" Id="7b6315df-9191-4330-9858-5d09caa5d78f" />
+  <Project Path="tests/FinanceTracker.Worker.IntegrationTests/FinanceTracker.Worker.IntegrationTests.csproj" Id="e7725fb1-cbb7-429e-9732-b5c34c314b91" />
 </Solution>
