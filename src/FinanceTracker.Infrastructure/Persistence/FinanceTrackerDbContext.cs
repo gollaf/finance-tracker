@@ -2,6 +2,7 @@ using FinanceTracker.Domain.Accounts;
 using FinanceTracker.Domain.Budgets;
 using FinanceTracker.Domain.Categories;
 using FinanceTracker.Domain.Categorization;
+using FinanceTracker.Domain.Imports;
 using FinanceTracker.Domain.Transactions;
 using FinanceTracker.Infrastructure.Outbox;
 using Microsoft.EntityFrameworkCore;
@@ -30,6 +31,8 @@ namespace FinanceTracker.Infrastructure.Persistence
         public DbSet<Budget> Budgets => Set<Budget>();
 
         public DbSet<Transaction> Transactions => Set<Transaction>();
+
+        public DbSet<ImportJob> ImportJobs => Set<ImportJob>();
 
         /// <summary>
         /// Not an aggregate: the transactional outbox's table, living in this

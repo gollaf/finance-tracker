@@ -2,7 +2,9 @@ using FinanceTracker.Application.Accounts;
 using FinanceTracker.Application.Budgets;
 using FinanceTracker.Application.Categories;
 using FinanceTracker.Application.Categorization;
+using FinanceTracker.Application.Common;
 using FinanceTracker.Application.Common.IntegrationEvents;
+using FinanceTracker.Application.Imports;
 using FinanceTracker.Application.Transactions;
 using FinanceTracker.Infrastructure.Ai;
 using FinanceTracker.Infrastructure.Messaging;
@@ -46,6 +48,11 @@ namespace FinanceTracker.Infrastructure
             services.AddScoped<ICategorizationRuleRepository, CategorizationRuleRepository>();
             services.AddScoped<IBudgetRepository, BudgetRepository>();
             services.AddScoped<ITransactionRepository, TransactionRepository>();
+            services.AddScoped<IImportJobRepository, ImportJobRepository>();
+
+            // Scoped, like the repositories: its database transaction has to
+            // be opened on the same DbContext they save through.
+            services.AddScoped<IUnitOfWork, EfCoreUnitOfWork>();
 
             // Scoped for the same reason as the repositories: it has to
             // share the one FinanceTrackerDbContext of the current request
