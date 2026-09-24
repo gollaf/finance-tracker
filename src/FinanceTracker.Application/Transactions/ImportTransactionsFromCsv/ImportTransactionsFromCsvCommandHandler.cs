@@ -1,6 +1,8 @@
 using FinanceTracker.Application.Accounts;
 using FinanceTracker.Application.Categorization;
 using FinanceTracker.Application.Common;
+using FinanceTracker.Application.Common.IntegrationEvents;
+using FinanceTracker.Application.Transactions.IntegrationEvents;
 using FinanceTracker.Domain.Categorization;
 using FinanceTracker.Domain.Common;
 using FinanceTracker.Domain.Transactions;
@@ -23,15 +25,18 @@ namespace FinanceTracker.Application.Transactions.ImportTransactionsFromCsv
         private readonly IAccountRepository _accountRepository;
         private readonly ITransactionRepository _transactionRepository;
         private readonly ICategorizationRuleRepository _categorizationRuleRepository;
+        private readonly IOutbox _outbox;
 
         public ImportTransactionsFromCsvCommandHandler(
             IAccountRepository accountRepository,
             ITransactionRepository transactionRepository,
-            ICategorizationRuleRepository categorizationRuleRepository)
+            ICategorizationRuleRepository categorizationRuleRepository,
+            IOutbox outbox)
         {
             _accountRepository = accountRepository;
             _transactionRepository = transactionRepository;
             _categorizationRuleRepository = categorizationRuleRepository;
+            _outbox = outbox;
         }
 
         public async Task<Result<ImportTransactionsResult>> Handle(
@@ -67,6 +72,11 @@ namespace FinanceTracker.Application.Transactions.ImportTransactionsFromCsv
                     var transaction = Transaction.Create(
                         account.Id, amount, row.Type, row.Description, row.OccurredOn, categoryId);
 
+                    // Per row, and BEFORE AddAsync: each row's own
+                    // SaveChangesAsync writes that row's event with it (see
+                    // IOutbox). A row that fails Transaction.Create above
+                    // never gets here, so it never produces an event.
+                    _outbox.Enqueue(new TransactionAdded(transaction.Id.Value));
                     await _transactionRepository.AddAsync(transaction, cancellationToken);
                     importedIds.Add(transaction.Id);
                 }

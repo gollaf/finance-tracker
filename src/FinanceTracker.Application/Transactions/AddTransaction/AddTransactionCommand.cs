@@ -9,8 +9,10 @@ namespace FinanceTracker.Application.Transactions.AddTransaction
     /// Records a new, uncategorized Transaction against an existing Account.
     /// No Currency here by design — the handler takes it from the Account it
     /// loads, so a transaction can never end up in a different currency than
-    /// the account it belongs to. Categorizing it is a separate step; see
-    /// CategorizeTransaction.
+    /// the account it belongs to. It is saved uncategorized; a
+    /// TransactionAdded integration event then lets the Worker suggest a
+    /// Category asynchronously, and the user can always set one directly
+    /// with CategorizeTransaction.
     /// </summary>
     public sealed record AddTransactionCommand(
         AccountId AccountId,

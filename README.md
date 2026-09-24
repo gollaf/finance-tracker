@@ -116,6 +116,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0012 — RabbitMQ topology and delivery guarantees](./docs/adr/0012-rabbitmq-topology-and-delivery-guarantees.md)
 - [0013 — Transactional outbox](./docs/adr/0013-transactional-outbox.md)
 - [0014 — AI categorization of uncategorized transactions](./docs/adr/0014-ai-transaction-categorization.md)
+- [0015 — Integration event contracts](./docs/adr/0015-integration-event-contracts.md)
 
 ## License
 

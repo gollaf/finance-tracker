@@ -1,8 +1,10 @@
 using FinanceTracker.Application.Accounts;
 using FinanceTracker.Application.Categorization;
 using FinanceTracker.Application.Common;
+using FinanceTracker.Application.Common.IntegrationEvents;
 using FinanceTracker.Application.Transactions;
 using FinanceTracker.Application.Transactions.ImportTransactionsFromCsv;
+using FinanceTracker.Application.Transactions.IntegrationEvents;
 using FinanceTracker.Domain.Accounts;
 using FinanceTracker.Domain.Categorization;
 using FinanceTracker.Domain.Common;
@@ -15,6 +17,8 @@ namespace FinanceTracker.Application.UnitTests.Transactions.ImportTransactionsFr
     public class ImportTransactionsFromCsvCommandHandlerTests
     {
         private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        private readonly IOutbox _outbox = Substitute.For<IOutbox>();
 
         private static Account NewAccount() => Account.Create("Checking", AccountType.Checking, "USD");
 
@@ -38,7 +42,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.ImportTransactionsFr
             ruleRepository.GetAllAsync(Arg.Any<CancellationToken>()).Returns(Array.Empty<CategorizationRule>());
 
             var handler = new ImportTransactionsFromCsvCommandHandler(
-                accountRepository, transactionRepository, ruleRepository);
+                accountRepository, transactionRepository, ruleRepository, _outbox);
             var command = new ImportTransactionsFromCsvCommand(account.Id, rows);
 
             var result = await handler.Handle(command, CancellationToken.None);
@@ -47,6 +51,44 @@ namespace FinanceTracker.Application.UnitTests.Transactions.ImportTransactionsFr
             result.Value.ImportedTransactionIds.Should().HaveCount(2);
             result.Value.Errors.Should().ContainSingle(e => e.RowIndex == 1);
             await transactionRepository.Received(2).AddAsync(Arg.Any<Transaction>(), Arg.Any<CancellationToken>());
+
+            // One event per imported row -- none for the row that failed.
+            var importedIds = result.Value.ImportedTransactionIds.Select(id => id.Value).ToList();
+            _outbox.Received(2).Enqueue(Arg.Any<TransactionAdded>());
+            _outbox.Received(1).Enqueue(Arg.Is<TransactionAdded>(e => e.TransactionId == importedIds[0]));
+            _outbox.Received(1).Enqueue(Arg.Is<TransactionAdded>(e => e.TransactionId == importedIds[1]));
+        }
+
+        [Fact]
+        public async Task Handle_EnqueuesEachRowsEventBeforeSavingThatRow()
+        {
+            var account = NewAccount();
+            var rows = new[]
+            {
+                new CsvTransactionRow(20m, TransactionType.Expense, "Coffee", Today),
+                new CsvTransactionRow(50m, TransactionType.Income, "Refund", Today),
+            };
+
+            var accountRepository = Substitute.For<IAccountRepository>();
+            accountRepository.GetByIdAsync(account.Id, Arg.Any<CancellationToken>()).Returns(account);
+            var transactionRepository = Substitute.For<ITransactionRepository>();
+            var ruleRepository = Substitute.For<ICategorizationRuleRepository>();
+            ruleRepository.GetAllAsync(Arg.Any<CancellationToken>()).Returns(Array.Empty<CategorizationRule>());
+
+            var handler = new ImportTransactionsFromCsvCommandHandler(
+                accountRepository, transactionRepository, ruleRepository, _outbox);
+
+            await handler.Handle(new ImportTransactionsFromCsvCommand(account.Id, rows), CancellationToken.None);
+
+            // Each row saves itself (AddAsync -> SaveChangesAsync), so each
+            // row's event has to be staged right before its own save.
+            Received.InOrder(() =>
+            {
+                _outbox.Enqueue(Arg.Any<TransactionAdded>());
+                _ = transactionRepository.AddAsync(Arg.Any<Transaction>(), Arg.Any<CancellationToken>());
+                _outbox.Enqueue(Arg.Any<TransactionAdded>());
+                _ = transactionRepository.AddAsync(Arg.Any<Transaction>(), Arg.Any<CancellationToken>());
+            });
         }
 
         [Fact]
@@ -61,7 +103,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.ImportTransactionsFr
             var ruleRepository = Substitute.For<ICategorizationRuleRepository>();
 
             var handler = new ImportTransactionsFromCsvCommandHandler(
-                accountRepository, transactionRepository, ruleRepository);
+                accountRepository, transactionRepository, ruleRepository, _outbox);
             var command = new ImportTransactionsFromCsvCommand(
                 AccountId.New(), new[] { new CsvTransactionRow(20m, TransactionType.Expense, "Coffee", Today) });
 
@@ -85,7 +127,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.ImportTransactionsFr
             var ruleRepository = Substitute.For<ICategorizationRuleRepository>();
 
             var handler = new ImportTransactionsFromCsvCommandHandler(
-                accountRepository, transactionRepository, ruleRepository);
+                accountRepository, transactionRepository, ruleRepository, _outbox);
             var command = new ImportTransactionsFromCsvCommand(
                 account.Id, new[] { new CsvTransactionRow(20m, TransactionType.Expense, "Coffee", Today) });
 
@@ -116,7 +158,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.ImportTransactionsFr
             ruleRepository.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new[] { rule });
 
             var handler = new ImportTransactionsFromCsvCommandHandler(
-                accountRepository, transactionRepository, ruleRepository);
+                accountRepository, transactionRepository, ruleRepository, _outbox);
             var command = new ImportTransactionsFromCsvCommand(
                 account.Id, new[] { new CsvTransactionRow(20m, TransactionType.Expense, "Coffee Shop", Today) });
 
@@ -124,6 +166,11 @@ namespace FinanceTracker.Application.UnitTests.Transactions.ImportTransactionsFr
 
             result.IsSuccess.Should().BeTrue();
             savedTransaction!.CategoryId.Should().Be(categoryId);
+
+            // Still published: TransactionAdded is a fact about every new
+            // Transaction; the categorization consumer is what skips ones
+            // that already have a Category.
+            _outbox.Received(1).Enqueue(Arg.Any<TransactionAdded>());
         }
     }
 }

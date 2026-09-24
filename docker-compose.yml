@@ -107,6 +107,10 @@ services:
       RabbitMq__Host: rabbitmq
       RabbitMq__UserName: financetracker
       RabbitMq__Password: financetracker
+      # The worker is what calls Groq to categorize transactions, so it
+      # needs the key too -- same optional ${GROQ_API_KEY:-} as the api
+      # above. Unset, categorization just leaves transactions uncategorized.
+      Groq__ApiKey: ${GROQ_API_KEY:-}
     # No "ports:" -- nothing connects to the worker; it only connects out,
     # to postgres and rabbitmq.
     depends_on:
