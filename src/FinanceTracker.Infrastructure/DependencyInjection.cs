@@ -4,6 +4,7 @@ using FinanceTracker.Application.Categories;
 using FinanceTracker.Application.Categorization;
 using FinanceTracker.Application.Transactions;
 using FinanceTracker.Infrastructure.Ai;
+using FinanceTracker.Infrastructure.Messaging;
 using FinanceTracker.Infrastructure.Persistence;
 using FinanceTracker.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -65,6 +66,39 @@ namespace FinanceTracker.Infrastructure
                 client.BaseAddress = new Uri("https://api.groq.com/");
                 client.Timeout = TimeSpan.FromSeconds(groqOptions.TimeoutSeconds);
             });
+
+            return services;
+        }
+
+        /// <summary>
+        /// Registers the RabbitMQ plumbing: one shared connection, the
+        /// publisher, and a startup step that declares the shared exchanges.
+        /// Separate from AddInfrastructure on purpose -- only a process that
+        /// actually talks to the broker (the Worker) calls this. The Api
+        /// never does: it only records events in the database, and never
+        /// needs RabbitMQ configuration or a broker connection at all. See
+        /// docs/adr/0011-async-messaging-rabbitmq-raw-client.md.
+        /// </summary>
+        public static IServiceCollection AddRabbitMqMessaging(this IServiceCollection services, IConfiguration configuration)
+        {
+            // ValidateOnStart: missing credentials stop the host at startup
+            // with this message, instead of surfacing later as a confusing
+            // authentication failure deep inside the connection retry loop.
+            services.AddOptions<RabbitMqOptions>()
+                .Bind(configuration.GetSection(RabbitMqOptions.SectionName))
+                .Validate(
+                    options => !string.IsNullOrWhiteSpace(options.UserName) && !string.IsNullOrWhiteSpace(options.Password),
+                    "RabbitMq:UserName and RabbitMq:Password must be set -- via User Secrets for `dotnet run`, " +
+                    "or the RabbitMq__UserName / RabbitMq__Password environment variables in docker-compose.yml.")
+                .ValidateOnStart();
+
+            // Singletons: the connection is meant to live as long as the
+            // process (see RabbitMqConnectionProvider), and the publisher
+            // holds one long-lived channel on top of it.
+            services.AddSingleton<RabbitMqConnectionProvider>();
+            services.AddSingleton<IMessagePublisher, RabbitMqPublisher>();
+
+            services.AddHostedService<RabbitMqTopologyInitializer>();
 
             return services;
         }

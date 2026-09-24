@@ -6,11 +6,13 @@ using FinanceTracker.Application.Categorization;
 using FinanceTracker.Application.Transactions;
 using FinanceTracker.Infrastructure;
 using FinanceTracker.Infrastructure.Ai;
+using FinanceTracker.Infrastructure.Messaging;
 using FinanceTracker.Infrastructure.Persistence.Repositories;
 using FluentAssertions;
 using MediatR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace FinanceTracker.Infrastructure.IntegrationTests
 {
@@ -87,6 +89,38 @@ namespace FinanceTracker.Infrastructure.IntegrationTests
             var mediator = scope.ServiceProvider.GetService<IMediator>();
 
             mediator.Should().NotBeNull();
+        }
+
+        /// <summary>
+        /// AddRabbitMqMessaging registers without connecting: nothing touches
+        /// the network until something first asks RabbitMqConnectionProvider
+        /// for a connection, so -- like the database registrations above --
+        /// this runs with no broker at all.
+        /// </summary>
+        [Fact]
+        public async Task AddRabbitMqMessaging_RegistersPublisherAndTopologyInitializer()
+        {
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["RabbitMq:UserName"] = "financetracker",
+                    ["RabbitMq:Password"] = "financetracker",
+                })
+                .Build();
+
+            var services = new ServiceCollection();
+            services.AddLogging();
+            services.AddRabbitMqMessaging(configuration);
+
+            // await using, not using: RabbitMqPublisher and
+            // RabbitMqConnectionProvider only implement IAsyncDisposable, and
+            // a synchronous ServiceProvider.Dispose() throws when it reaches
+            // a singleton like that.
+            await using var provider = services.BuildServiceProvider(validateScopes: true);
+
+            provider.GetService<IMessagePublisher>().Should().BeOfType<RabbitMqPublisher>();
+            provider.GetService<RabbitMqConnectionProvider>().Should().NotBeNull();
+            provider.GetServices<IHostedService>().Should().ContainSingle(s => s is RabbitMqTopologyInitializer);
         }
     }
 }
