@@ -1,5 +1,7 @@
 using FinanceTracker.Application.Accounts;
 using FinanceTracker.Application.Common;
+using FinanceTracker.Application.Common.IntegrationEvents;
+using FinanceTracker.Application.Transactions.IntegrationEvents;
 using FinanceTracker.Domain.Common;
 using FinanceTracker.Domain.Transactions;
 using MediatR;
@@ -10,12 +12,14 @@ namespace FinanceTracker.Application.Transactions.AddTransaction
     {
         private readonly IAccountRepository _accountRepository;
         private readonly ITransactionRepository _transactionRepository;
+        private readonly IOutbox _outbox;
 
         public AddTransactionCommandHandler(
-            IAccountRepository accountRepository, ITransactionRepository transactionRepository)
+            IAccountRepository accountRepository, ITransactionRepository transactionRepository, IOutbox outbox)
         {
             _accountRepository = accountRepository;
             _transactionRepository = transactionRepository;
+            _outbox = outbox;
         }
 
         public async Task<Result<TransactionId>> Handle(
@@ -39,6 +43,10 @@ namespace FinanceTracker.Application.Transactions.AddTransaction
             var transaction = Transaction.Create(
                 request.AccountId, amount, request.Type, request.Description, request.OccurredOn);
 
+            // Enqueue BEFORE AddAsync: AddAsync's SaveChangesAsync is what
+            // writes the outbox row too, in the same database transaction
+            // (see IOutbox and docs/adr/0013-transactional-outbox.md).
+            _outbox.Enqueue(new TransactionAdded(transaction.Id.Value));
             await _transactionRepository.AddAsync(transaction, cancellationToken);
 
             return Result.Success(transaction.Id);
