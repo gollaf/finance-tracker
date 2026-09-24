@@ -100,6 +100,13 @@ services:
       # compose's built-in DNS -- "localhost" here would mean this worker
       # container itself.
       ConnectionStrings__FinanceTracker: "Host=postgres;Port=5432;Database=financetracker;Username=postgres;Password=postgres"
+      # Double underscore = one level of nesting: RabbitMq__Host is read as
+      # configuration key RabbitMq:Host (RabbitMqOptions.Host). "rabbitmq"
+      # is the service name again, and the credentials match the rabbitmq
+      # service's RABBITMQ_DEFAULT_USER / RABBITMQ_DEFAULT_PASS above.
+      RabbitMq__Host: rabbitmq
+      RabbitMq__UserName: financetracker
+      RabbitMq__Password: financetracker
     # No "ports:" -- nothing connects to the worker; it only connects out,
     # to postgres and rabbitmq.
     depends_on:

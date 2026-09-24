@@ -17,7 +17,8 @@ var builder = Host.CreateApplicationBuilder(args);
 
 builder.Services
     .AddApplication()
-    .AddInfrastructure(builder.Configuration);
+    .AddInfrastructure(builder.Configuration)
+    .AddRabbitMqMessaging(builder.Configuration);
 
 builder.Services.AddHostedService<HeartbeatService>();
 
