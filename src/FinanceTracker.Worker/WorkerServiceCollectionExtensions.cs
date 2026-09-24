@@ -20,6 +20,7 @@ namespace FinanceTracker.Worker
                 .AddRabbitMqMessaging(configuration);
 
             services.AddHostedService<TransactionAddedCategorizationConsumer>();
+            services.AddHostedService<ImportRequestedConsumer>();
 
             return services;
         }

@@ -9,7 +9,7 @@ namespace FinanceTracker.Worker.IntegrationTests
     /// given name, and counts how often it was asked. Everything else in the
     /// pipeline under test is real.
     /// </summary>
-    internal sealed class StubCategorySuggester : ICategorySuggester
+    public sealed class StubCategorySuggester : ICategorySuggester
     {
         private readonly string _categoryName;
         private int _calls;
