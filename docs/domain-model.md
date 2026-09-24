@@ -134,8 +134,9 @@ given a description and an ordered set of rules, returns the first
 matching `CategoryId`, or `null` if none match. This is a domain service
 rather than a method on any single aggregate because it operates across
 many `CategorizationRule` instances at once. It is the entire Phase 1
-implementation of `CategorizeTransaction` — the AI fallback for
-unmatched transactions is Phase 4.
+implementation of `CategorizeTransaction`. The AI fallback for unmatched
+transactions came in Phase 5, asynchronously in the Worker -- see
+`docs/adr/0014-ai-transaction-categorization.md`.
 
 ## How cross-aggregate consistency works in Phase 1
 
@@ -148,6 +149,14 @@ nothing derived from Transactions to keep in sync. Balance and spending
 summaries are computed at query time instead. Revisit this once
 Infrastructure/EF Core lands in Phase 2, and again if domain events become
 useful for Phase 5's async processing.
+
+**Update (Phase 5):** still no domain events. Cross-process reactions use
+*integration events* written through a transactional outbox instead
+(`docs/adr/0013-transactional-outbox.md`,
+`docs/adr/0015-integration-event-contracts.md`), and the one operation that
+does change several aggregates atomically -- processing an `ImportJob` --
+uses an explicit database transaction
+(`docs/adr/0016-asynchronous-csv-import.md`).
 
 ## Explicitly out of scope for Phase 1
 

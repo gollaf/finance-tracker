@@ -16,10 +16,14 @@ and intentionally scoped to teach specific technologies.
 
 **Commands:** CreateAccount, AddTransaction, UpdateTransaction,
 DeleteTransaction, CreateBudget, UpdateBudget, CategorizeTransaction,
-ImportTransactionsFromCsv, CreateCategory, CreateCategorizationRule
+CreateCategory, CreateCategorizationRule, StartImport and ProcessImportJob
+(asynchronous CSV import, Phase 5 -- replaced the synchronous
+ImportTransactionsFromCsv), SuggestCategoryForTransaction (AI
+categorization, Phase 5)
 
 **Queries:** GetTransactions (filtered/paged), GetSpendingSummary,
-GetBudgetStatus, GetAccountBalance, GetSpendingInsights (Phase 4)
+GetBudgetStatus, GetAccountBalance, GetSpendingInsights (Phase 4),
+GetImportJob (Phase 5)
 
 ## Tech Stack
 
@@ -27,8 +31,8 @@ GetBudgetStatus, GetAccountBalance, GetSpendingInsights (Phase 4)
 |---|---|---|
 | Backend | .NET 10, Clean Architecture, CQRS (MediatR) | Industry-standard, testable |
 | Database | PostgreSQL + EF Core | See `docs/adr/0001-postgresql-over-mssql.md` |
-| Messaging | RabbitMQ + MassTransit | Decouple AI calls from request path |
-| AI | Ollama (local) / Groq free tier | No subscription cost |
+| Messaging | RabbitMQ (raw `RabbitMQ.Client`) + transactional outbox | Decouple AI calls and imports from the request path; see ADRs 0011-0013 |
+| AI | Groq free tier (Ollama possible later) | No subscription cost |
 | Testing | xUnit, FluentAssertions, NSubstitute, Testcontainers | |
 | Containers | Docker, Kubernetes (Minikube/Kind locally) | |
 | Deployment | Oracle Cloud free VM (persistent), AWS (timeboxed learning sprint) | |
@@ -44,9 +48,12 @@ Clean Architecture, dependency rule points inward:
 - **Domain** — entities, value objects, business rules. No dependencies.
 - **Application** — use cases (commands/queries via MediatR), interfaces for
   everything external (repositories, AI service, event publisher).
-- **Infrastructure** — EF Core/Postgres, RabbitMQ publisher, AI client.
-  Implements Application's interfaces.
-- **API** — controllers, auth, wires everything via DI.
+- **Infrastructure** — EF Core/Postgres, transactional outbox, RabbitMQ
+  publisher/consumer plumbing, AI client. Implements Application's
+  interfaces.
+- **API** — controllers, wires everything via DI.
+- **Worker** — second entry point with no HTTP: relays outbox events to
+  RabbitMQ and runs the message consumers.
 
 ## Roadmap
 
@@ -54,7 +61,7 @@ Clean Architecture, dependency rule points inward:
 - [x] **Phase 2** — Infrastructure & API (EF Core, Postgres, Testcontainers, Scalar/OpenAPI)
 - [x] **Phase 3** — Dockerize (Dockerfile, docker-compose)
 - [x] **Phase 4** — AI feature, synchronous first version
-- [ ] **Phase 5** — Async processing via RabbitMQ (refactor AI + CSV import)
+- [x] **Phase 5** — Async processing via RabbitMQ (AI categorization + CSV import, transactional outbox)
 - [ ] **Phase 6** — Kubernetes locally (multi-service: API, Worker, RabbitMQ, Postgres)
 - [ ] **Phase 7** — CI/CD via GitHub Actions
 - [ ] **Phase 8** — Deploy: Oracle free VM (persistent), AWS sprint (timeboxed)

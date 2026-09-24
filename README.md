@@ -24,22 +24,26 @@ Clean Architecture with the dependency rule pointing inward:
 
 ```
 API  ──▶  Application  ──▶  Domain
+Worker  ──▶  Application  ──▶  Domain
 Infrastructure  ──▶  Application  ──▶  Domain
 ```
 
 - **Domain** — entities, value objects, business rules. No external dependencies.
 - **Application** — use cases (CQRS via MediatR), validation, interfaces for
   everything external.
-- **Infrastructure** — EF Core + PostgreSQL, RabbitMQ publisher, AI client.
-- **API** — ASP.NET Core Web API, auth, DI composition root.
-- **Worker** — background service consuming RabbitMQ for async AI categorization.
+- **Infrastructure** — EF Core + PostgreSQL, the transactional outbox,
+  RabbitMQ publisher/consumer plumbing, the Groq AI client.
+- **API** — ASP.NET Core Web API, DI composition root.
+- **Worker** — a second composition root with no HTTP: relays outbox events
+  to RabbitMQ and consumes them — AI categorization of new transactions and
+  background CSV import.
 
 ## Tech Stack
 
 Backend: .NET 10 · EF Core · MediatR · FluentValidation
 Data: PostgreSQL
-Messaging: RabbitMQ (MassTransit)
-AI: Ollama / free-tier LLM API
+Messaging: RabbitMQ (raw RabbitMQ.Client) · transactional outbox
+AI: Groq free-tier LLM API
 Testing: xUnit · FluentAssertions · NSubstitute · Testcontainers
 Infra: Docker · Kubernetes · GitHub Actions
 Frontend (planned): Angular
@@ -52,11 +56,12 @@ cd finance-tracker
 docker compose up
 ```
 
-This starts the API and PostgreSQL (RabbitMQ and a Worker service join
-in later phases -- see `PROJECT_PLAN.md`). Interactive API docs (Scalar,
-Development only) are available at `http://localhost:5000/scalar/v1`
-once running, and liveness/readiness health endpoints at `/health/live`
-and `/health/ready`.
+This starts PostgreSQL, RabbitMQ, the API, and the Worker. Once running:
+
+- Interactive API docs (Scalar, Development only): `http://localhost:5000/scalar/v1`
+- Liveness/readiness health endpoints: `/health/live` and `/health/ready`
+- RabbitMQ management UI: `http://localhost:15672` (user and password
+  `financetracker`, local development only)
 
 ## Running Tests
 
@@ -64,8 +69,10 @@ and `/health/ready`.
 dotnet test
 ```
 
-Integration tests spin up a real PostgreSQL instance via Testcontainers —
-Docker must be running.
+Integration tests spin up real PostgreSQL and RabbitMQ instances via
+Testcontainers — Docker must be running. `FinanceTracker.Worker.IntegrationTests`
+runs the whole asynchronous pipeline end to end, with only the AI replaced
+by a stub.
 
 ## AI-Powered Spending Insights
 
@@ -92,6 +99,38 @@ GROQ_API_KEY=gsk_...
 Without a key, the endpoint still works — `narrativeGeneratedByAi` is
 `false` and `narrative` is a templated fallback built from the same
 per-category numbers.
+
+## Asynchronous Processing
+
+Work that doesn't need to finish inside an HTTP request runs in the Worker,
+driven by RabbitMQ ([ADR 0011](./docs/adr/0011-async-messaging-rabbitmq-raw-client.md)):
+
+```
+API ── one DB commit: change + outbox row ──▶ Postgres ◀── OutboxRelay (Worker)
+                                                              │ publish
+                                                              ▼
+                                                   RabbitMQ ──▶ Worker consumers
+```
+
+- **Transactional outbox** — an event is stored in the same database
+  transaction as the change it describes, then relayed to RabbitMQ, so it
+  can't be lost between the two ([ADR 0013](./docs/adr/0013-transactional-outbox.md)).
+  Delivery is at-least-once with manual acks, retries, and a dead-letter
+  queue per consumer, and every consumer is idempotent
+  ([ADR 0012](./docs/adr/0012-rabbitmq-topology-and-delivery-guarantees.md)).
+- **AI categorization** — every new transaction publishes `TransactionAdded`.
+  If no categorization rule matched it, the Worker asks the AI to pick one of
+  your existing categories; the AI can't invent categories or overwrite one
+  you set yourself ([ADR 0014](./docs/adr/0014-ai-transaction-categorization.md)).
+  The Worker uses the same `GROQ_API_KEY` as above; without it, transactions
+  simply stay uncategorized.
+- **CSV import** — `POST /api/transactions/import` (multipart: `AccountId`,
+  `File`) parses the file and answers `202 Accepted` with an import job id
+  and a `Location` header. Poll `GET /api/imports/{id}` for the outcome:
+  the imported count and every rejected row by line number. The whole
+  import runs in one database transaction, so a crash never leaves a file
+  half-imported or a row imported twice
+  ([ADR 0016](./docs/adr/0016-asynchronous-csv-import.md)).
 
 ## Roadmap
 
