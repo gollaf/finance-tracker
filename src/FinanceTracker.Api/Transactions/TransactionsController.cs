@@ -1,11 +1,12 @@
 using FinanceTracker.Api.Common;
+using FinanceTracker.Api.Imports;
+using FinanceTracker.Application.Imports.StartImport;
 using FinanceTracker.Application.Transactions.AddTransaction;
 using FinanceTracker.Application.Transactions.CategorizeTransaction;
 using FinanceTracker.Application.Transactions.DeleteTransaction;
 using FinanceTracker.Application.Transactions.GetSpendingInsights;
 using FinanceTracker.Application.Transactions.GetSpendingSummary;
 using FinanceTracker.Application.Transactions.GetTransactions;
-using FinanceTracker.Application.Transactions.ImportTransactionsFromCsv;
 using FinanceTracker.Application.Transactions.UpdateTransaction;
 using FinanceTracker.Domain.Common;
 using MediatR;
@@ -17,7 +18,7 @@ namespace FinanceTracker.Api.Transactions
     /// Covers Transaction's core lifecycle (Add, Update, Delete), assigning
     /// a Category, listing an Account's Transactions, summarizing its
     /// spending by Category for a month, generating AI spending insights,
-    /// and importing a batch from CSV.
+    /// and starting a background import of a CSV file.
     /// </summary>
     [ApiController]
     [Route("api/transactions")]
@@ -177,10 +178,11 @@ namespace FinanceTracker.Api.Transactions
 
         // The file arrives as multipart/form-data (see ImportTransactionsRequest's
         // own doc comment for why that one DTO isn't a record). Parsing the raw
-        // CSV text into structured rows is this layer's job -- CsvTransactionRow's
-        // doc comment in Application says as much -- and a row that fails even
-        // that parse is reported the same way a row that parses but fails a
-        // domain rule is: as an entry in Errors, never as a request-level failure.
+        // CSV text into structured rows is this layer's job (ADR 0006); the
+        // import itself runs later in the Worker (ADR 0016). A row that fails
+        // to parse is recorded on the import job the same way a row that
+        // fails a domain rule later is: as an entry in its Errors, never as a
+        // request-level failure.
         [HttpPost("import")]
         public async Task<IActionResult> Import([FromForm] ImportTransactionsRequest request, CancellationToken cancellationToken)
         {
@@ -198,37 +200,38 @@ namespace FinanceTracker.Api.Transactions
                 csvContent = await reader.ReadToEndAsync(cancellationToken);
             }
 
-            var (parsedRows, parseErrors) = CsvTransactionRowParser.Parse(csvContent);
+            var (rows, parseErrors) = CsvTransactionRowParser.Parse(csvContent);
 
-            // Every row failed to parse (or the file had no data rows at all) --
-            // there's nothing valid to hand the command, and sending it an empty
-            // Rows list would just turn into a generic 400 from its own validator,
-            // burying the real per-row parse errors. Report them directly instead.
-            if (parsedRows.Count == 0)
+            // Not a single row parsed (or the file had no data rows at
+            // all): there's nothing to import, so no job is created and the
+            // uploader gets the parse errors immediately, in the response,
+            // instead of being sent off to poll a job with nothing in it.
+            if (rows.Count == 0)
             {
-                return Ok(new ImportTransactionsResponse(Array.Empty<Guid>(), parseErrors));
+                var problem = new ProblemDetails
+                {
+                    Status = StatusCodes.Status400BadRequest,
+                    Title = "Import.NoValidRows",
+                    Detail = "None of the file's rows could be parsed, so nothing was imported.",
+                };
+                problem.Extensions["errors"] = parseErrors
+                    .Select(e => new ImportRowErrorResponse(e.RowNumber, e.Message))
+                    .ToList();
+
+                return new ObjectResult(problem) { StatusCode = StatusCodes.Status400BadRequest };
             }
 
-            var command = new ImportTransactionsFromCsvCommand(
-                new AccountId(request.AccountId), parsedRows.Select(r => r.Row).ToList());
+            var command = new StartImportCommand(new AccountId(request.AccountId), rows, parseErrors);
             var result = await _sender.Send(command, cancellationToken);
 
             if (result.IsFailure)
                 return result.ToActionResult();
 
-            // The command's own Errors carry a RowIndex into the filtered list of
-            // rows it was actually given, not the file's line numbers -- translate
-            // each one back through ParsedCsvRow.OriginalIndex before merging with
-            // this layer's own parseErrors, which already speak in file line numbers.
-            var handlerErrors = result.Value.Errors
-                .Select(e => new ImportRowErrorResponse(parsedRows[e.RowIndex].OriginalIndex + 2, e.Message));
-
-            var allErrors = parseErrors.Concat(handlerErrors).OrderBy(e => e.RowNumber).ToList();
-
-            var response = new ImportTransactionsResponse(
-                result.Value.ImportedTransactionIds.Select(id => id.Value).ToList(), allErrors);
-
-            return Ok(response);
+            // 202 Accepted: "your request is valid and has been taken on,
+            // but the work isn't done yet". The Location header tells the
+            // client where to poll for the outcome (ADR 0016).
+            var importJobId = result.Value.Value;
+            return Accepted($"/api/imports/{importJobId}", new StartImportResponse(importJobId));
         }
     }
 }
