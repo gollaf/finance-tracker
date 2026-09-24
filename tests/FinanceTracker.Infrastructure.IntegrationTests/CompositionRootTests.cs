@@ -3,12 +3,15 @@ using FinanceTracker.Application.Accounts;
 using FinanceTracker.Application.Budgets;
 using FinanceTracker.Application.Categories;
 using FinanceTracker.Application.Categorization;
+using FinanceTracker.Application.Common;
 using FinanceTracker.Application.Common.IntegrationEvents;
+using FinanceTracker.Application.Imports;
 using FinanceTracker.Application.Transactions;
 using FinanceTracker.Infrastructure;
 using FinanceTracker.Infrastructure.Ai;
 using FinanceTracker.Infrastructure.Messaging;
 using FinanceTracker.Infrastructure.Outbox;
+using FinanceTracker.Infrastructure.Persistence;
 using FinanceTracker.Infrastructure.Persistence.Repositories;
 using FluentAssertions;
 using MediatR;
@@ -72,6 +75,8 @@ namespace FinanceTracker.Infrastructure.IntegrationTests
         [InlineData(typeof(IInsightsGenerator), typeof(GroqInsightsGenerator))]
         [InlineData(typeof(IOutbox), typeof(EfCoreOutbox))]
         [InlineData(typeof(ICategorySuggester), typeof(GroqCategorySuggester))]
+        [InlineData(typeof(IImportJobRepository), typeof(ImportJobRepository))]
+        [InlineData(typeof(IUnitOfWork), typeof(EfCoreUnitOfWork))]
         public void ServiceProvider_ResolvesEachRepository_ToItsInfrastructureImplementation(
             Type serviceType, Type expectedImplementationType)
         {
