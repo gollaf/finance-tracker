@@ -71,6 +71,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests
         [InlineData(typeof(ITransactionRepository), typeof(TransactionRepository))]
         [InlineData(typeof(IInsightsGenerator), typeof(GroqInsightsGenerator))]
         [InlineData(typeof(IOutbox), typeof(EfCoreOutbox))]
+        [InlineData(typeof(ICategorySuggester), typeof(GroqCategorySuggester))]
         public void ServiceProvider_ResolvesEachRepository_ToItsInfrastructureImplementation(
             Type serviceType, Type expectedImplementationType)
         {
