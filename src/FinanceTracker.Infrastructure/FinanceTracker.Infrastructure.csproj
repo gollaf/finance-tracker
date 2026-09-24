@@ -40,6 +40,18 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The official RabbitMQ client (Apache 2.0 / MPL 2.0, no commercial tier)
+         backing everything under Messaging/ see
+         docs/adr/0011-async-messaging-rabbitmq-raw-client.md for why the raw
+         client rather than a framework such as MassTransit. -->
+    <PackageReference Include="RabbitMQ.Client" Version="7.2.2" />
+    <!-- BackgroundService, the base class of RabbitMqConsumer and
+         RabbitMqTopologyInitializer. Only the abstractions: this library
+         defines hosted services, it doesn't host them - the Worker does. -->
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\FinanceTracker.Application\FinanceTracker.Application.csproj" />
   </ItemGroup>
 
