@@ -1,3 +1,4 @@
+using FinanceTracker.Api.HealthChecks;
 using FinanceTracker.Application;
 using FinanceTracker.Infrastructure;
 using FinanceTracker.Infrastructure.Persistence;
@@ -48,25 +49,41 @@ builder.Services.AddProblemDetails(options =>
     };
 });
 
-// Two separate health checks, not one, because they answer two different
-// questions a container orchestrator asks -- see ADR 0009. The database
-// check is tagged "ready" so it can be selected independently below; it
-// is never wired into the liveness endpoint.
+// Two separate health endpoints, not one, because they answer two different
+// questions a container orchestrator asks -- see ADR 0009. Both database
+// checks are tagged "ready" so they can be selected independently below;
+// they are never wired into the liveness endpoint. "migrations" is what
+// keeps an instance out of rotation while its database is reachable but
+// not yet migrated -- see PendingMigrationsHealthCheck.
 builder.Services.AddHealthChecks()
-    .AddDbContextCheck<FinanceTrackerDbContext>("database", tags: ["ready"]);
+    .AddDbContextCheck<FinanceTrackerDbContext>("database", tags: ["ready"])
+    .AddCheck<PendingMigrationsHealthCheck>("migrations", tags: ["ready"]);
 
 var app = builder.Build();
 
-// Applies any pending EF Core migration against whatever database
-// ConnectionStrings:FinanceTracker points at, every time this host starts.
-// This is what lets `docker compose up` produce a fully migrated database
-// with zero manual steps -- see ADR 0008 for the full reasoning, and the
-// caveat it records for once more than one instance of this API is ever
-// running at the same time (Phase 6, Kubernetes).
-using (var migrationScope = app.Services.CreateScope())
+// `dotnet FinanceTracker.Api.dll migrate` applies any pending EF Core
+// migration and exits without ever starting the web server. That lets a
+// deployment run migrations exactly once, as a step of its own, instead of
+// inside every instance's startup -- see ADR 0017. The verb deliberately
+// has no leading dashes: the command-line configuration provider ignores a
+// bare word, so it never turns into a stray configuration key.
+if (args is ["migrate", ..])
 {
-    var dbContext = migrationScope.ServiceProvider.GetRequiredService<FinanceTrackerDbContext>();
-    await dbContext.Database.MigrateAsync();
+    await ApplyMigrationsAsync(app.Services);
+    app.Logger.LogInformation("Database schema is up to date; exiting because the 'migrate' command was given.");
+    return;
+}
+
+// Everywhere else -- `dotnet run`, docker compose, the integration tests --
+// the Api still applies pending migrations on every startup, so a fresh
+// database needs no manual step (ADR 0008). A deployment that runs
+// `migrate` as its own step turns this off with
+// Database__ApplyMigrationsOnStartup=false. Read from app.Configuration,
+// after Build(), rather than builder.Configuration: configuration that
+// WebApplicationFactory-based tests add is only applied during Build().
+if (app.Configuration.GetValue("Database:ApplyMigrationsOnStartup", defaultValue: true))
+{
+    await ApplyMigrationsAsync(app.Services);
 }
 
 app.UseExceptionHandler();
@@ -91,7 +108,8 @@ app.MapHealthChecks("/health/live", new HealthCheckOptions
 });
 
 // Readiness: can this instance currently serve real traffic? Runs only
-// the checks tagged "ready" -- today, just the database.
+// the checks tagged "ready": the database is reachable, and its schema has
+// every migration this build expects.
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains("ready")
@@ -100,6 +118,17 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 app.MapControllers();
 
 app.Run();
+
+// Safe to call repeatedly and concurrently: MigrateAsync applies only the
+// migrations not yet recorded in __EFMigrationsHistory, and EF Core holds a
+// database-wide lock while it does, so two processes calling it at the same
+// moment run one after the other rather than both applying the same one.
+static async Task ApplyMigrationsAsync(IServiceProvider services)
+{
+    using var scope = services.CreateScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<FinanceTrackerDbContext>();
+    await dbContext.Database.MigrateAsync();
+}
 
 // Exposes the top-level Program so FinanceTracker.Api.IntegrationTests'
 // CustomWebApplicationFactory : WebApplicationFactory<Program> can boot

@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted
+Accepted. Decision 5 (startup migrations) is amended by
+[ADR 0017](./0017-migrations-as-a-separate-deployment-step.md) for
+multi-instance deployments.
 
 ## Context
 
