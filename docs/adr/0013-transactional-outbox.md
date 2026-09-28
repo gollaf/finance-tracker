@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted
+Accepted. The single-relay assumption is now a deployment role of its
+own, see [ADR 0018](./0018-worker-roles.md).
 
 ## Context
 

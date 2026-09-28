@@ -70,6 +70,16 @@ namespace FinanceTracker.Infrastructure.Messaging
         /// Changing one means deleting the queue first (management UI, or
         /// `docker compose down -v` locally).
         /// </remarks>
+        public static Task DeclareConsumerQueueAsync(
+            IChannel channel,
+            ConsumerQueue queue,
+            CancellationToken cancellationToken = default) =>
+            DeclareConsumerQueueAsync(channel, queue.Name, queue.RoutingKey, queue.DeliveryLimit, cancellationToken);
+
+        /// <summary>
+        /// Same as the ConsumerQueue overload above, with the queue's
+        /// settings passed one by one.
+        /// </summary>
         public static async Task DeclareConsumerQueueAsync(
             IChannel channel,
             string queueName,

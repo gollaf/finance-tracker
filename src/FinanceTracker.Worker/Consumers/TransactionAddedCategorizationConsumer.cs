@@ -28,11 +28,19 @@ namespace FinanceTracker.Worker.Consumers
         /// <summary>
         /// Named after what this consumer does, not after the event: another
         /// consumer interested in "transaction.added" (say, budget alerts)
-        /// gets its own queue and its own copy of every event.
+        /// gets its own queue and its own copy of every event. Public and
+        /// static so AddWorker can register it for RabbitMqTopologyInitializer
+        /// to declare at startup, even in a process that doesn't run this
+        /// consumer.
         /// </summary>
-        protected override string QueueName => "finance-tracker.categorize-transaction";
+        public static readonly ConsumerQueue Queue =
+            new("finance-tracker.categorize-transaction", TransactionAdded.EventName);
 
-        protected override string RoutingKey => TransactionAdded.EventName;
+        protected override string QueueName => Queue.Name;
+
+        protected override string RoutingKey => Queue.RoutingKey;
+
+        protected override int DeliveryLimit => Queue.DeliveryLimit;
 
         protected override async Task HandleAsync(
             TransactionAdded message, IServiceProvider services, CancellationToken cancellationToken)

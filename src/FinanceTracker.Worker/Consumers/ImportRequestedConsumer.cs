@@ -30,9 +30,18 @@ namespace FinanceTracker.Worker.Consumers
         {
         }
 
-        protected override string QueueName => "finance-tracker.process-import";
+        /// <summary>
+        /// Registered by AddWorker as well, for the same reason as
+        /// TransactionAddedCategorizationConsumer.Queue.
+        /// </summary>
+        public static readonly ConsumerQueue Queue =
+            new("finance-tracker.process-import", ImportRequested.EventName);
 
-        protected override string RoutingKey => ImportRequested.EventName;
+        protected override string QueueName => Queue.Name;
+
+        protected override string RoutingKey => Queue.RoutingKey;
+
+        protected override int DeliveryLimit => Queue.DeliveryLimit;
 
         protected override async Task HandleAsync(
             ImportRequested message, IServiceProvider services, CancellationToken cancellationToken)

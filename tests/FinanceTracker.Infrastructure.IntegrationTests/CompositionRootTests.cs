@@ -107,7 +107,38 @@ namespace FinanceTracker.Infrastructure.IntegrationTests
         /// this runs with no broker at all.
         /// </summary>
         [Fact]
-        public async Task AddRabbitMqMessaging_RegistersPublisherTopologyInitializerAndOutboxRelay()
+        public async Task AddRabbitMqMessaging_RegistersPublisherAndTopologyInitializer_ButNotTheOutboxRelay()
+        {
+            var services = CreateMessagingServices();
+
+            // await using, not using: RabbitMqPublisher and
+            // RabbitMqConnectionProvider only implement IAsyncDisposable, and
+            // a synchronous ServiceProvider.Dispose() throws when it reaches
+            // a singleton like that.
+            await using var provider = services.BuildServiceProvider(validateScopes: true);
+
+            provider.GetService<IMessagePublisher>().Should().BeOfType<RabbitMqPublisher>();
+            provider.GetService<RabbitMqConnectionProvider>().Should().NotBeNull();
+            provider.GetServices<IHostedService>().Should().ContainSingle(s => s is RabbitMqTopologyInitializer);
+            provider.GetServices<IHostedService>().Should().NotContain(s => s is OutboxRelay);
+        }
+
+        /// <summary>
+        /// Checks the registration only, not a resolved instance: resolving
+        /// OutboxRelay would also need everything AddInfrastructure registers.
+        /// </summary>
+        [Fact]
+        public void AddOutboxRelay_RegistersTheRelayAsAHostedService()
+        {
+            var services = new ServiceCollection();
+
+            services.AddOutboxRelay();
+
+            services.Should().ContainSingle(d =>
+                !d.IsKeyedService && d.ServiceType == typeof(IHostedService) && d.ImplementationType == typeof(OutboxRelay));
+        }
+
+        private static ServiceCollection CreateMessagingServices()
         {
             var configuration = new ConfigurationBuilder()
                 .AddInMemoryCollection(new Dictionary<string, string?>
@@ -120,17 +151,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests
             var services = new ServiceCollection();
             services.AddLogging();
             services.AddRabbitMqMessaging(configuration);
-
-            // await using, not using: RabbitMqPublisher and
-            // RabbitMqConnectionProvider only implement IAsyncDisposable, and
-            // a synchronous ServiceProvider.Dispose() throws when it reaches
-            // a singleton like that.
-            await using var provider = services.BuildServiceProvider(validateScopes: true);
-
-            provider.GetService<IMessagePublisher>().Should().BeOfType<RabbitMqPublisher>();
-            provider.GetService<RabbitMqConnectionProvider>().Should().NotBeNull();
-            provider.GetServices<IHostedService>().Should().ContainSingle(s => s is RabbitMqTopologyInitializer);
-            provider.GetServices<IHostedService>().Should().ContainSingle(s => s is OutboxRelay);
+            return services;
         }
     }
 }

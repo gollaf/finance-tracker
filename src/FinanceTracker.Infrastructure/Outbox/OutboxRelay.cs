@@ -23,9 +23,11 @@ namespace FinanceTracker.Infrastructure.Outbox
     ///
     /// Assumes a single running relay. Two instances polling the same table
     /// could both pick up the same row and publish it twice -- still
-    /// correct, given idempotent consumers, but wasteful. Running several
-    /// Worker instances would call for row locking (SELECT ... FOR UPDATE
-    /// SKIP LOCKED) here.
+    /// correct, given idempotent consumers, but wasteful. Scaling the Worker
+    /// therefore scales only its consumers: the relay is a separate role
+    /// that a deployment runs exactly once (docs/adr/0018-worker-roles.md).
+    /// Running several relays at once would call for row locking
+    /// (SELECT ... FOR UPDATE SKIP LOCKED) here.
     /// </remarks>
     public sealed class OutboxRelay : BackgroundService
     {
@@ -65,11 +67,12 @@ namespace FinanceTracker.Infrastructure.Outbox
                     }
                     catch (Exception ex) when (IsMissingOutboxTable(ex))
                     {
-                        // Only the Api applies migrations (ADR 0008), and
-                        // this process can start before it has. Expected
-                        // for a few seconds after `docker compose up`.
+                        // Only the Api applies migrations (ADR 0008, or its
+                        // `migrate` command, ADR 0017), and this process can
+                        // start before that has happened. Expected for a few
+                        // seconds after a fresh start.
                         _logger.LogInformation(
-                            "Outbox table does not exist yet (the Api applies migrations on startup); retrying.");
+                            "Outbox table does not exist yet (migrations have not been applied); retrying.");
                     }
                     catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
                     {

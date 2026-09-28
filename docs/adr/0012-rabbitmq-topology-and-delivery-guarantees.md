@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted
+Accepted. Section 1 is extended by
+[ADR 0018](./0018-worker-roles.md): consumer queues are also declared at
+startup by every Worker process, not only by the consumer that reads them.
 
 ## Context
 
