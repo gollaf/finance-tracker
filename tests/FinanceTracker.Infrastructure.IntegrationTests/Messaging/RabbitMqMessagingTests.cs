@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FinanceTracker.Infrastructure.Messaging;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
@@ -150,6 +151,28 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Messaging
             Volatile.Read(ref handlerCalls).Should().Be(0);
 
             await consumer.StopAsync(CancellationToken.None);
+        }
+
+        [Fact]
+        public async Task TopologyInitializer_DeclaresRegisteredQueues_SoAPublishSucceedsBeforeAnyConsumerRuns()
+        {
+            // No consumer anywhere, and nothing else declares this queue: the
+            // initializer alone must create it and bind it to the exchange.
+            var queue = new ConsumerQueue("test.declared-at-startup", "test.declared-at-startup");
+            var initializer = new RabbitMqTopologyInitializer(
+                _connectionProvider, [queue], NullLogger<RabbitMqTopologyInitializer>.Instance);
+
+            await initializer.StartAsync(CancellationToken.None);
+            await initializer.ExecuteTask!.WaitAsync(WaitTimeout);
+
+            var sent = new TestMessage(Guid.NewGuid(), "waiting for a consumer");
+            await _publisher.PublishAsync(ToOutgoing(queue.RoutingKey, MessageSerialization.Serialize(sent)));
+
+            var waiting = await WaitForMessageAsync(queue.Name);
+
+            waiting.Should().NotBeNull("the message should be waiting in the queue the initializer declared");
+            JsonSerializer.Deserialize<TestMessage>(waiting!.Body.Span, MessageSerialization.Options)
+                .Should().Be(sent);
         }
 
         private TestConsumer CreateConsumer(
