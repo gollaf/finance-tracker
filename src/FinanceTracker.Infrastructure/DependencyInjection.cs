@@ -97,10 +97,10 @@ namespace FinanceTracker.Infrastructure
 
         /// <summary>
         /// Registers the RabbitMQ plumbing: one shared connection, the
-        /// publisher, a startup step that declares the shared exchanges, and
-        /// the OutboxRelay that publishes stored integration events. The
-        /// relay reads the outbox through FinanceTrackerDbContext, so this
-        /// must be called together with AddInfrastructure.
+        /// publisher, and a startup step that declares the shared exchanges
+        /// and every registered ConsumerQueue. The OutboxRelay is registered
+        /// separately, by AddOutboxRelay, so a process can talk to the broker
+        /// without also running the relay.
         /// Separate from AddInfrastructure on purpose -- only a process that
         /// actually talks to the broker (the Worker) calls this. The Api
         /// never does: it only records events in the database, and never
@@ -127,6 +127,23 @@ namespace FinanceTracker.Infrastructure
             services.AddSingleton<IMessagePublisher, RabbitMqPublisher>();
 
             services.AddHostedService<RabbitMqTopologyInitializer>();
+
+            return services;
+        }
+
+        /// <summary>
+        /// Registers the OutboxRelay, which publishes stored integration
+        /// events. It reads the outbox through FinanceTrackerDbContext and
+        /// publishes through IMessagePublisher, so it needs both
+        /// AddInfrastructure and AddRabbitMqMessaging as well.
+        /// Kept apart from AddRabbitMqMessaging because the relay is meant to
+        /// run in exactly one process at a time (docs/adr/0013-transactional-outbox.md),
+        /// while consumers can run in as many as needed -- so whether a
+        /// process runs it is that process's own decision. See
+        /// docs/adr/0018-worker-roles.md.
+        /// </summary>
+        public static IServiceCollection AddOutboxRelay(this IServiceCollection services)
+        {
             services.AddHostedService<OutboxRelay>();
 
             return services;

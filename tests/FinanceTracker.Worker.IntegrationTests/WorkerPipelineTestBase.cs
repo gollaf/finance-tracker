@@ -43,14 +43,62 @@ namespace FinanceTracker.Worker.IntegrationTests
             .WithPassword(RabbitMqPassword)
             .Build();
 
+        private readonly List<IHost> _additionalHosts = [];
+
         private IHost _host = null!;
 
         protected StubCategorySuggester Suggester { get; } = new("Transport");
+
+        /// <summary>
+        /// Extra configuration for the Worker every test starts with -- for
+        /// example, its role switches. Empty by default: one Worker doing
+        /// everything, like docker compose runs it.
+        /// </summary>
+        protected virtual IReadOnlyDictionary<string, string?> WorkerSettings { get; } =
+            new Dictionary<string, string?>();
 
         public async Task InitializeAsync()
         {
             await Task.WhenAll(_postgres.StartAsync(), _rabbitMq.StartAsync());
 
+            _host = BuildWorkerHost(WorkerSettings);
+
+            // In the running system the Api applies migrations (ADR 0008 and
+            // ADR 0017); there's no Api here, so the test does it.
+            await using (var scope = _host.Services.CreateAsyncScope())
+            {
+                await scope.ServiceProvider.GetRequiredService<FinanceTrackerDbContext>().Database.MigrateAsync();
+            }
+
+            await _host.StartAsync();
+        }
+
+        public async Task DisposeAsync()
+        {
+            foreach (var host in _additionalHosts)
+                await StopAndDisposeAsync(host);
+
+            await StopAndDisposeAsync(_host);
+
+            await _rabbitMq.DisposeAsync();
+            await _postgres.DisposeAsync();
+        }
+
+        /// <summary>
+        /// Starts a second Worker process against the same Postgres and
+        /// RabbitMQ -- the in-test equivalent of another Kubernetes pod. It
+        /// shares <see cref="Suggester"/> with the first one. Stopped and
+        /// disposed automatically at the end of the test.
+        /// </summary>
+        protected async Task StartAdditionalWorkerAsync(IReadOnlyDictionary<string, string?> workerSettings)
+        {
+            var host = BuildWorkerHost(workerSettings);
+            _additionalHosts.Add(host);
+            await host.StartAsync();
+        }
+
+        private IHost BuildWorkerHost(IReadOnlyDictionary<string, string?> workerSettings)
+        {
             // Development: turns on DI scope validation and ValidateOnBuild,
             // so a missing registration fails right here, exactly as it
             // would when the real Worker starts.
@@ -67,6 +115,7 @@ namespace FinanceTracker.Worker.IntegrationTests
                 ["RabbitMq:UserName"] = RabbitMqUser,
                 ["RabbitMq:Password"] = RabbitMqPassword,
             });
+            builder.Configuration.AddInMemoryCollection(workerSettings);
 
             builder.Services.AddWorker(builder.Configuration);
 
@@ -74,32 +123,20 @@ namespace FinanceTracker.Worker.IntegrationTests
             builder.Services.RemoveAll<ICategorySuggester>();
             builder.Services.AddSingleton<ICategorySuggester>(Suggester);
 
-            _host = builder.Build();
-
-            // In the running system the Api applies migrations on startup
-            // (ADR 0008); there's no Api here, so the test does it.
-            await using (var scope = _host.Services.CreateAsyncScope())
-            {
-                await scope.ServiceProvider.GetRequiredService<FinanceTrackerDbContext>().Database.MigrateAsync();
-            }
-
-            await _host.StartAsync();
+            return builder.Build();
         }
 
-        public async Task DisposeAsync()
+        private static async Task StopAndDisposeAsync(IHost host)
         {
-            await _host.StopAsync();
+            await host.StopAsync();
 
-            // Not _host.Dispose(): some singletons (RabbitMqPublisher,
+            // Not host.Dispose(): some singletons (RabbitMqPublisher,
             // RabbitMqConnectionProvider) only implement IAsyncDisposable,
             // and a synchronous Dispose() throws when it reaches them.
-            if (_host is IAsyncDisposable asyncDisposable)
+            if (host is IAsyncDisposable asyncDisposable)
                 await asyncDisposable.DisposeAsync();
             else
-                _host.Dispose();
-
-            await _rabbitMq.DisposeAsync();
-            await _postgres.DisposeAsync();
+                host.Dispose();
         }
 
         protected async Task<TValue> SendAsync<TValue>(IRequest<Result<TValue>> request)
@@ -144,6 +181,41 @@ namespace FinanceTracker.Worker.IntegrationTests
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Polls until every outbox row has been published (ProcessedAt set),
+        /// or the timeout passes. A row the relay couldn't publish stays
+        /// unprocessed, so this fails -- rather than hangs -- if publishing
+        /// is broken.
+        /// </summary>
+        protected async Task WaitUntilOutboxIsPublishedAsync()
+        {
+            var deadline = DateTime.UtcNow + WaitTimeout;
+
+            while (true)
+            {
+                await using (var scope = _host.Services.CreateAsyncScope())
+                {
+                    var unpublished = await scope.ServiceProvider.GetRequiredService<FinanceTrackerDbContext>()
+                        .OutboxMessages
+                        .AsNoTracking()
+                        .Where(m => m.ProcessedAt == null)
+                        .Select(m => new { m.EventName, m.Attempts, m.LastError })
+                        .ToListAsync();
+
+                    if (unpublished.Count == 0)
+                        return;
+
+                    if (DateTime.UtcNow >= deadline)
+                    {
+                        unpublished.Should().BeEmpty("the outbox relay should have published every row by now");
+                        return;
+                    }
+                }
+
+                await Task.Delay(TimeSpan.FromMilliseconds(250));
+            }
         }
 
         /// <summary>Polls until the ImportJob is no longer Pending, or the timeout passes.</summary>
