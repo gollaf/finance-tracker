@@ -44,6 +44,8 @@ docker-compose.override.yml
  
 ## Kubernetes — local-only generated manifests, if any
 k8s/*.local.yaml
+# Real values for the local cluster's Secret -- see deploy/k8s/secrets.env.example
+deploy/k8s/secrets.env
  
 ## OS files
 .DS_Store
