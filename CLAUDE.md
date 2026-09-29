@@ -28,6 +28,10 @@ PostgreSQL, RabbitMQ, Ollama/Groq for AI features. Full plan and roadmap:
 - Build: `dotnet build`
 - Test: `dotnet test`
 - Run locally (API + Postgres + RabbitMQ + Worker): `docker compose up`
+- Run on the local Kubernetes cluster (Minikube): see README's "Running on
+  Kubernetes (local)" -- manifests in `deploy/k8s/`, applied with
+  `kubectl apply -k deploy/k8s`; `deploy/k8s/secrets.env` is gitignored and
+  must never be committed
 
 ## Constraints
 

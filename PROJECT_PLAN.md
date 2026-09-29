@@ -34,7 +34,7 @@ GetImportJob (Phase 5)
 | Messaging | RabbitMQ (raw `RabbitMQ.Client`) + transactional outbox | Decouple AI calls and imports from the request path; see ADRs 0011-0013 |
 | AI | Groq free tier (Ollama possible later) | No subscription cost |
 | Testing | xUnit, FluentAssertions, NSubstitute, Testcontainers | |
-| Containers | Docker, Kubernetes (Minikube/Kind locally) | |
+| Containers | Docker, Kubernetes (Minikube locally; plain manifests + Kustomize) | See ADRs 0019-0021 |
 | Deployment | Oracle Cloud free VM (persistent), AWS (timeboxed learning sprint) | |
 | CI/CD | GitHub Actions | |
 | Frontend | Angular (later phase) | |
@@ -53,7 +53,9 @@ Clean Architecture, dependency rule points inward:
   interfaces.
 - **API** — controllers, wires everything via DI.
 - **Worker** — second entry point with no HTTP: relays outbox events to
-  RabbitMQ and runs the message consumers.
+  RabbitMQ and runs the message consumers. The two roles can run in
+  separate processes, so consumers scale while exactly one relay runs
+  (ADR 0018).
 
 ## Roadmap
 
@@ -62,7 +64,7 @@ Clean Architecture, dependency rule points inward:
 - [x] **Phase 3** — Dockerize (Dockerfile, docker-compose)
 - [x] **Phase 4** — AI feature, synchronous first version
 - [x] **Phase 5** — Async processing via RabbitMQ (AI categorization + CSV import, transactional outbox)
-- [ ] **Phase 6** — Kubernetes locally (multi-service: API, Worker, RabbitMQ, Postgres)
+- [x] **Phase 6** — Kubernetes locally (Minikube: API ×2, migrations Job, Worker split into relay + scalable consumers, RabbitMQ, Postgres)
 - [ ] **Phase 7** — CI/CD via GitHub Actions
 - [ ] **Phase 8** — Deploy: Oracle free VM (persistent), AWS sprint (timeboxed)
 - [ ] **Phase 9** — Angular frontend
