@@ -1,0 +1,139 @@
+# RabbitMQ for the local cluster: the same official image as
+# docker-compose.yml, one node, with its data on a PersistentVolumeClaim.
+# Same shape as postgres.yaml -- read that file first; only what differs is
+# explained in detail here. See docs/adr/0019-local-kubernetes-cluster-and-manifests.md.
+
+# Headless Service, for the same two reasons as the "postgres" one: the
+# StatefulSet's required serviceName, and a stable name for clients -- the
+# Worker will connect to Host=rabbitmq, exactly as in docker-compose.yml.
+# Two ports this time, each with a name, so other objects (and humans) can
+# refer to "amqp" or "management" instead of remembering numbers.
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  labels:
+    app: rabbitmq
+spec:
+  clusterIP: None
+  selector:
+    app: rabbitmq
+  ports:
+    - name: amqp
+      port: 5672
+      targetPort: amqp
+    - name: management
+      port: 15672
+      targetPort: management
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rabbitmq
+  labels:
+    app: rabbitmq
+spec:
+  serviceName: rabbitmq
+  # One node. Several RabbitMQ Pods would not form a cluster by themselves:
+  # clustering needs peer discovery configured on top (what the RabbitMQ
+  # Cluster Operator automates). Quorum queues work fine on a single node --
+  # they just have nothing to replicate to.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      containers:
+        - name: rabbitmq
+          # The -management variant adds the web UI on port 15672.
+          image: rabbitmq:4-management
+          ports:
+            - name: amqp
+              containerPort: 5672
+            - name: management
+              containerPort: 15672
+          env:
+            # Same user as docker-compose.yml. RabbitMQ creates it only on
+            # the very first start, when its data directory is empty --
+            # changing either value later doesn't touch an existing user.
+            - name: RABBITMQ_DEFAULT_USER
+              value: financetracker
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: finance-tracker-secrets
+                  key: RABBITMQ_PASSWORD
+          volumeMounts:
+            # RabbitMQ keeps its data under a directory named after its node
+            # name, rabbit@<hostname> -- the reason docker-compose.yml pins
+            # "hostname: rabbitmq". Nothing to pin here: a StatefulSet Pod's
+            # hostname is its own stable name, rabbitmq-0, every time it is
+            # recreated, so it always finds its own data again.
+            - name: data
+              mountPath: /var/lib/rabbitmq
+            # One extra file in RabbitMQ's config directory, taken from the
+            # rabbitmq-config ConfigMap. subPath mounts just that one file:
+            # mounting the ConfigMap over the whole /etc/rabbitmq/conf.d/
+            # directory would hide the files the image already ships there.
+            - name: config
+              mountPath: /etc/rabbitmq/conf.d/30-memory.conf
+              subPath: 30-memory.conf
+              readOnly: true
+          # Probes check the AMQP port with a plain TCP connect, done by the
+          # kubelet itself. docker-compose.yml runs `rabbitmq-diagnostics
+          # check_port_connectivity` instead, which answers the same question
+          # but starts a whole Erlang CLI process every time -- noticeable CPU
+          # and memory when repeated every few seconds, forever.
+          #
+          # Startup probe: RabbitMQ's first boot takes a while. Until this
+          # passes, Kubernetes runs neither of the other two probes, so a slow
+          # start can't be mistaken for a dead process. Allows up to
+          # 30 x 5s = 150s.
+          startupProbe:
+            tcpSocket:
+              port: amqp
+            periodSeconds: 5
+            failureThreshold: 30
+          # Readiness: listed behind the "rabbitmq" Service only while the
+          # AMQP listener accepts connections.
+          readinessProbe:
+            tcpSocket:
+              port: amqp
+            periodSeconds: 10
+            failureThreshold: 3
+          # Liveness: restart only after a full minute without the port
+          # answering -- lenient for the same reason as Postgres: restarting a
+          # broker drops every client connection at once.
+          livenessProbe:
+            tcpSocket:
+              port: amqp
+            periodSeconds: 10
+            failureThreshold: 6
+          # The memory limit and RabbitMQ's own memory watermark (set in
+          # rabbitmq-memory.conf) work together: RabbitMQ starts throttling
+          # publishers at 600Mi, well before Kubernetes would kill the
+          # container at 1Gi.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+      volumes:
+        # "rabbitmq-config" is rewritten by Kustomize to the generated,
+        # hash-suffixed ConfigMap name, like the Secret.
+        - name: config
+          configMap:
+            name: rabbitmq-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

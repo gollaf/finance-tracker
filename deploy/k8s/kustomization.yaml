@@ -13,6 +13,16 @@ namespace: finance-tracker
 resources:
   - namespace.yaml
   - postgres.yaml
+  - rabbitmq.yaml
+
+# RabbitMQ's extra configuration file, as a ConfigMap. Same hash-suffix
+# behavior as the Secret below: editing rabbitmq-memory.conf produces a new
+# ConfigMap name, which rolls the RabbitMQ Pod so it reads the new file.
+configMapGenerator:
+  - name: rabbitmq-config
+    files:
+      # <key>=<file>: the key becomes the file name inside the Pod.
+      - 30-memory.conf=rabbitmq-memory.conf
 
 # Builds the Secret from a local, gitignored file instead of a committed
 # manifest -- see secrets.env.example for the format and how to create it.
