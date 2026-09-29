@@ -1,0 +1,141 @@
+# PostgreSQL for the local cluster: the same official image as
+# docker-compose.yml, one instance, with its data on a PersistentVolumeClaim so
+# it survives the Pod being deleted, rescheduled, or restarted.
+# See docs/adr/0019-local-kubernetes-cluster-and-manifests.md.
+
+# Headless Service (clusterIP: None): instead of one virtual IP that
+# load-balances, the DNS name "postgres" resolves straight to the IP of the
+# ready Postgres Pod. It serves two purposes at once:
+#   - it's the "serviceName" the StatefulSet below requires, which gives the
+#     Pod its stable DNS identity (postgres-0.postgres);
+#   - it's how the Api and Worker will reach the database, as Host=postgres --
+#     exactly the name docker-compose.yml uses, so connection strings don't
+#     change.
+# Headless DNS only lists Pods whose readiness probe passes, so nothing is
+# pointed at a Postgres that is still initializing.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  clusterIP: None
+  selector:
+    app: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+# StatefulSet rather than Deployment: a database isn't one of N interchangeable
+# copies. A StatefulSet gives its Pod a stable name (postgres-0, not a random
+# suffix) and -- through volumeClaimTemplates -- its own disk that is
+# reattached every time the Pod is recreated.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  serviceName: postgres
+  # One instance. Running several Postgres Pods doesn't make a cluster: each
+  # would get its own empty disk and its own separate database. Real
+  # replication needs Postgres-level setup (or an operator) -- out of scope for
+  # a local environment.
+  replicas: 1
+  # Which Pods this StatefulSet owns. Must match the template's labels below,
+  # and can't be changed after creation.
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            # Non-secret settings, identical to docker-compose.yml.
+            - name: POSTGRES_DB
+              value: financetracker
+            - name: POSTGRES_USER
+              value: postgres
+            # The password comes from the generated Secret, never from this
+            # file. "finance-tracker-secrets" is rewritten by Kustomize to the
+            # hashed name it generates (see kustomization.yaml).
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: finance-tracker-secrets
+                  key: POSTGRES_PASSWORD
+            # Keep the data one directory BELOW the mount point. initdb
+            # refuses to initialize a directory that isn't empty, and many
+            # volume types put a "lost+found" folder at their root. Minikube's
+            # volumes don't, but a real cluster's usually do -- this makes the
+            # manifest work on both.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          # Readiness: "can Postgres accept connections right now?" -- the same
+          # pg_isready check as docker-compose.yml's healthcheck. Until it
+          # passes, the Pod isn't listed behind the "postgres" Service, so
+          # clients can't connect to a database that's still starting up.
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres", "-d", "financetracker", "-h", "127.0.0.1"]
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # Liveness: "is the process wedged and in need of a restart?" A
+          # plain TCP check on the port, deliberately more forgiving than
+          # readiness: restarting a database is disruptive, so it should only
+          # happen when Postgres has stopped answering entirely for a while
+          # (6 failures x 10s = a minute), never because of a slow moment.
+          # initialDelaySeconds covers the first start, when initdb runs
+          # before the port opens at all.
+          livenessProbe:
+            tcpSocket:
+              port: postgres
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          # requests: what the scheduler reserves for this container when it
+          # picks a node -- a guarantee. limits: the ceiling. Going over the
+          # memory limit gets the container killed (OOMKilled) rather than
+          # starving everything else on the node. No CPU limit on purpose:
+          # exceeding one doesn't kill anything, it throttles the process,
+          # which for a database shows up as mysterious slowness.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+  # The disk. For each Pod the StatefulSet creates a PersistentVolumeClaim
+  # named <template name>-<pod name> -- here data-postgres-0 -- and binds it
+  # to that Pod forever. No storageClassName, so the cluster's default is used
+  # (Minikube's "standard": a folder inside the Minikube node).
+  #
+  # Deleting the Pod, or even the StatefulSet, keeps the claim and its data.
+  # Deleting the claim, the namespace, or the whole cluster (minikube delete)
+  # is what actually wipes the database.
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        # ReadWriteOnce: mountable read-write by a single node at a time --
+        # the normal mode for a disk that belongs to one database.
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

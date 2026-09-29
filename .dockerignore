@@ -18,6 +18,9 @@
 # build context also keeps `docker build`'s context upload small and fast.
 tests/
 docs/
+# Kubernetes manifests, and the gitignored deploy/k8s/secrets.env with real
+# credentials -- a file that must never end up in a build context.
+deploy/
 *.md
 .github/
 .editorconfig
