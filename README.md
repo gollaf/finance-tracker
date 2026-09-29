@@ -159,6 +159,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0016 — Asynchronous CSV import](./docs/adr/0016-asynchronous-csv-import.md)
 - [0017 — Database migrations as a separate deployment step](./docs/adr/0017-migrations-as-a-separate-deployment-step.md)
 - [0018 — Worker roles: outbox relay and consumers as separately deployable parts](./docs/adr/0018-worker-roles.md)
+- [0019 — Local Kubernetes cluster and manifest layout](./docs/adr/0019-local-kubernetes-cluster-and-manifests.md)
 
 ## License
 
