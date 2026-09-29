@@ -1,0 +1,82 @@
+# Applies EF Core migrations to the in-cluster database, once, then stops --
+# the "separate migration step" of ADR 0017. It runs the Api image with the
+# `migrate` command instead of starting the web server; the Api Pods
+# themselves never migrate (api.yaml sets Database__ApplyMigrationsOnStartup
+# to false). See docs/adr/0020-application-images-and-rollout-in-the-local-cluster.md.
+#
+# A Job is finished once one of its Pods exits with code 0. A finished Job
+# is never run again, and its Pod template can't be changed ("field is
+# immutable") -- so this one deletes itself 5 minutes after finishing
+# (ttlSecondsAfterFinished below). The effect: every `kubectl apply -k` after
+# that finds no Job and creates a fresh one, so migrations run once per
+# deploy. Running them again when nothing is pending is harmless: `migrate`
+# applies only what's missing.
+#
+# Within those 5 minutes, an apply that changes this Job (a new Secret hash,
+# for example) is refused as "field is immutable". Delete it and apply again:
+#
+#   kubectl delete job migrate -n finance-tracker
+#   kubectl apply -k deploy/k8s
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate
+  labels:
+    app: migrate
+spec:
+  # How many failed attempts before the Job gives up and is marked Failed.
+  # The first attempt can fail simply because Postgres isn't ready yet --
+  # everything is applied at once, with no ordering -- so a few retries, with
+  # the Job controller's growing delay between them (10s, 20s, 40s, ...), is
+  # the normal way to wait for it.
+  backoffLimit: 5
+  # Delete the Job (and its Pods, with their logs) 5 minutes after it
+  # finishes -- long enough to read `kubectl logs job/migrate`.
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: migrate
+    spec:
+      # Never: a failed attempt is left as its own (failed) Pod and the retry
+      # gets a new one, so `kubectl logs` can still show why an earlier
+      # attempt failed. (OnFailure would restart the container in place.)
+      # A Job's Pods may not use Always -- that would never finish.
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: finance-tracker-api:dev
+          # The image only exists inside Minikube (built locally and loaded
+          # into it, never pushed to a registry). IfNotPresent: use the local
+          # copy; never try to download it. It's also the default for any tag
+          # other than :latest -- spelled out here because getting it wrong
+          # shows up as ErrImagePull.
+          imagePullPolicy: IfNotPresent
+          # Appended to the image's ENTRYPOINT ["dotnet", "FinanceTracker.Api.dll"]:
+          # the container runs `dotnet FinanceTracker.Api.dll migrate`.
+          # (`command:` would replace the ENTRYPOINT; `args:` replaces CMD.)
+          args: ["migrate"]
+          env:
+            # Same environment as the Api Pods (api.yaml), so `migrate` reads
+            # the same configuration files they do.
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Development
+            # Read from the Secret first, so the next variable can use it.
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: finance-tracker-secrets
+                  key: POSTGRES_PASSWORD
+            # $(POSTGRES_PASSWORD) is expanded by Kubernetes itself when the
+            # container starts, from the variable defined just above (it has
+            # to come earlier in this list). The password stays in the Secret;
+            # this file only holds the shape of the connection string.
+            # "postgres" is the headless Service from postgres.yaml.
+            - name: ConnectionStrings__FinanceTracker
+              value: Host=postgres;Port=5432;Database=financetracker;Username=postgres;Password=$(POSTGRES_PASSWORD)
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
