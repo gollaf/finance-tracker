@@ -1,0 +1,135 @@
+# The Api: two identical Pods behind one Service. See
+# docs/adr/0020-application-images-and-rollout-in-the-local-cluster.md.
+
+# ClusterIP Service (the default type -- not headless this time): one stable
+# virtual IP and DNS name, "api", that load-balances across every READY Api
+# Pod. Reachable only from inside the cluster; from your laptop, use
+#   kubectl port-forward svc/api 5001:8080 -n finance-tracker
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  labels:
+    app: api
+spec:
+  selector:
+    app: api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+# Deployment, not StatefulSet: Api Pods hold no data of their own and are
+# interchangeable -- any of them can answer any request, and a replacement
+# can have a new random name.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels:
+    app: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api
+  # Rolling update: when the Pod template changes (a new image, a new Secret),
+  # start one new Pod at a time (maxSurge: 1) and remove an old one only once
+  # the new one is ready (maxUnavailable: 0) -- so there are always at least
+  # two Pods able to answer.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+        - name: api
+          image: finance-tracker-api:dev
+          # See migrate-job.yaml: the image only exists inside Minikube.
+          imagePullPolicy: IfNotPresent
+          ports:
+            # The aspnet base image makes Kestrel listen on 8080 (the
+            # Dockerfile's EXPOSE 8080, and docker-compose.yml's "5000:8080").
+            - name: http
+              containerPort: 8080
+          env:
+            # Development, like docker-compose.yml: enables Scalar at
+            # /scalar/v1 and exception details in error responses. Fine for a
+            # cluster on your own laptop; a real deployment would use
+            # Production.
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Development
+            # The migrate Job applies migrations; the Api Pods must not
+            # (ADR 0017). /health/ready stays failing until the Job is done.
+            - name: Database__ApplyMigrationsOnStartup
+              value: "false"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: finance-tracker-secrets
+                  key: POSTGRES_PASSWORD
+            # Same composition as in migrate-job.yaml.
+            - name: ConnectionStrings__FinanceTracker
+              value: Host=postgres;Port=5432;Database=financetracker;Username=postgres;Password=$(POSTGRES_PASSWORD)
+            # Optional on purpose, matching the app: without a Groq key,
+            # spending insights fall back to a templated text instead of
+            # failing (ADR 0010). optional: true means a secrets.env without
+            # this line starts the Pod with the variable unset, instead of
+            # refusing to create the container at all.
+            - name: Groq__ApiKey
+              valueFrom:
+                secretKeyRef:
+                  name: finance-tracker-secrets
+                  key: GROQ_API_KEY
+                  optional: true
+          # The two endpoints ADR 0009 built for exactly this.
+          #
+          # Startup: give the process up to 30 x 2s = 60s to begin answering
+          # at all, before liveness starts counting.
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          # Liveness: /health/live runs no checks, so it only fails if the
+          # process itself can't handle a request -- never because Postgres
+          # is down. Three misses in a row (30s) -> restart the container.
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          # Readiness: /health/ready checks that the database is reachable
+          # AND fully migrated. While it fails, this Pod gets no traffic from
+          # the Service -- but is not restarted.
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            periodSeconds: 5
+            failureThreshold: 3
+          # When a Pod is removed (rollout, scale down), two things start at
+          # the same moment: the container gets SIGTERM, and the Service
+          # starts removing the Pod from its endpoints. The second takes a
+          # moment to reach every node; a container that stopped instantly
+          # would still receive a few requests it can no longer answer.
+          # Waiting 5s before the shutdown begins closes that gap.
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 5
+          # .NET reads the container's memory limit and sizes its garbage
+          # collector to stay under it.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
