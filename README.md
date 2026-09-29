@@ -63,6 +63,69 @@ This starts PostgreSQL, RabbitMQ, the API, and the Worker. Once running:
 - RabbitMQ management UI: `http://localhost:15672` (user and password
   `financetracker`, local development only)
 
+## Running on Kubernetes (local)
+
+The same system also runs on a local [Minikube](https://minikube.sigs.k8s.io/)
+cluster, from plain manifests in [`deploy/k8s/`](./deploy/k8s) combined
+with Kustomize. It runs next to docker compose, not instead of it: a
+separate database, separate data, nothing shared.
+
+```
+namespace finance-tracker
+  api (Deployment, 2 Pods) ── Service api ◀── kubectl port-forward (localhost:5001)
+  migrate (Job) ── applies EF Core migrations once per deploy, then exits
+  outbox-relay (Deployment, exactly 1)    ┐ same Worker image,
+  worker (Deployment, scalable)           ┘ different role (ADR 0018)
+  postgres, rabbitmq (StatefulSets, each with its own PersistentVolumeClaim)
+```
+
+**One-time setup** (Docker Desktop running; PowerShell shown):
+
+```powershell
+winget install Kubernetes.minikube
+winget install -e --id Kubernetes.kubectl
+minikube start --driver=docker --cpus=2 --memory=4096
+
+# Local credentials for the cluster's Secret -- gitignored, never committed.
+Copy-Item deploy/k8s/secrets.env.example deploy/k8s/secrets.env
+# then edit deploy/k8s/secrets.env and set every value
+```
+
+**Build the images into the cluster and deploy:**
+
+```powershell
+docker build -t finance-tracker-api:dev -f src/FinanceTracker.Api/Dockerfile .
+docker build -t finance-tracker-worker:dev -f src/FinanceTracker.Worker/Dockerfile .
+minikube image load finance-tracker-api:dev
+minikube image load finance-tracker-worker:dev
+
+kubectl apply -k deploy/k8s
+kubectl get pods -n finance-tracker -w      # wait until everything is Running / Completed
+```
+
+**Use it** (each `port-forward` keeps running in its own window):
+
+```powershell
+kubectl port-forward svc/api 5001:8080 -n finance-tracker            # API: http://localhost:5001/scalar/v1
+kubectl port-forward svc/rabbitmq 15673:15672 -n finance-tracker     # RabbitMQ UI: http://localhost:15673
+kubectl port-forward svc/postgres 5433:5432 -n finance-tracker       # Postgres: localhost:5433
+kubectl scale deployment worker --replicas=3 -n finance-tracker      # more consumers
+```
+
+**After a code change**, rebuild and load the image as above, then
+`kubectl rollout restart deployment/api -n finance-tracker` (or
+`deployment/worker`, `deployment/outbox-relay`). The tag stays `:dev`, so
+without the restart the old code keeps running. If the change adds a
+migration, first run `kubectl delete job migrate -n finance-tracker
+--ignore-not-found` and `kubectl apply -k deploy/k8s` again.
+
+**Stop / clean up:** `minikube stop` pauses everything and keeps the data;
+`minikube delete` removes the cluster and its data.
+
+The reasoning behind each piece is in ADRs 0017-0021: migrations as a
+separate step, Worker roles, the cluster layout and Secrets, images and
+rollouts, and why the Worker has no health probes.
+
 ## Running Tests
 
 ```bash
