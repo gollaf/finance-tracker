@@ -1,0 +1,141 @@
+# The Worker, as two Deployments of the same image in the two roles from
+# docs/adr/0018-worker-roles.md:
+#   - outbox-relay: publishes outbox rows to RabbitMQ. Exactly one, always.
+#   - worker:       consumes messages from the queues. Scale freely.
+# Neither has an HTTP port or health probes -- see
+# docs/adr/0021-worker-probes-and-shutdown-in-kubernetes.md.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: outbox-relay
+  labels:
+    app: outbox-relay
+spec:
+  # One relay. Two would read the same unpublished outbox rows and publish
+  # them twice (ADR 0013) -- harmless, since consumers are idempotent, but
+  # wasteful. Don't scale this one.
+  replicas: 1
+  # Recreate: on an update, stop the old Pod completely BEFORE starting the
+  # new one. The default (RollingUpdate) starts the new one first, which
+  # would briefly run two relays. A few seconds without a relay only delays
+  # publishing -- rows wait safely in the outbox table.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: outbox-relay
+  template:
+    metadata:
+      labels:
+        app: outbox-relay
+    spec:
+      # Longer than the .NET host's own 30-second shutdown timeout, so the
+      # host finishes stopping by itself before Kubernetes force-kills it.
+      terminationGracePeriodSeconds: 45
+      containers:
+        - name: outbox-relay
+          image: finance-tracker-worker:dev
+          # The image only exists inside Minikube -- see migrate-job.yaml.
+          imagePullPolicy: IfNotPresent
+          env:
+            # A non-web .NET host reads DOTNET_ENVIRONMENT, not
+            # ASPNETCORE_ENVIRONMENT (same as docker-compose.yml).
+            - name: DOTNET_ENVIRONMENT
+              value: Development
+            # This Pod's role: the relay only.
+            - name: Worker__RunConsumers
+              value: "false"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: finance-tracker-secrets
+                  key: POSTGRES_PASSWORD
+            # Composed by Kubernetes, as in api.yaml.
+            - name: ConnectionStrings__FinanceTracker
+              value: Host=postgres;Port=5432;Database=financetracker;Username=postgres;Password=$(POSTGRES_PASSWORD)
+            # "rabbitmq" is the headless Service from rabbitmq.yaml. The
+            # user name matches RABBITMQ_DEFAULT_USER there.
+            - name: RabbitMq__Host
+              value: rabbitmq
+            - name: RabbitMq__UserName
+              value: financetracker
+            - name: RabbitMq__Password
+              valueFrom:
+                secretKeyRef:
+                  name: finance-tracker-secrets
+                  key: RABBITMQ_PASSWORD
+            # No Groq key: the relay only publishes; it never calls the AI.
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  labels:
+    app: worker
+spec:
+  # Start with two; `kubectl scale deployment worker --replicas=N` for more.
+  # RabbitMQ hands each message to exactly one consumer, so N workers share
+  # the queues' work instead of repeating it.
+  replicas: 2
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      # See outbox-relay above. Here it also matters for messages in flight:
+      # on SIGTERM the consumers stop, and a message that was mid-handling is
+      # nacked back to its queue (ADR 0012) for another worker to pick up.
+      terminationGracePeriodSeconds: 45
+      containers:
+        - name: worker
+          image: finance-tracker-worker:dev
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: DOTNET_ENVIRONMENT
+              value: Development
+            # This Pod's role: the consumers only.
+            - name: Worker__RunOutboxRelay
+              value: "false"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: finance-tracker-secrets
+                  key: POSTGRES_PASSWORD
+            - name: ConnectionStrings__FinanceTracker
+              value: Host=postgres;Port=5432;Database=financetracker;Username=postgres;Password=$(POSTGRES_PASSWORD)
+            - name: RabbitMq__Host
+              value: rabbitmq
+            - name: RabbitMq__UserName
+              value: financetracker
+            - name: RabbitMq__Password
+              valueFrom:
+                secretKeyRef:
+                  name: finance-tracker-secrets
+                  key: RABBITMQ_PASSWORD
+            # The consumers categorize transactions with Groq. Optional, as
+            # in api.yaml: without a key, transactions are simply left
+            # uncategorized (ADR 0014).
+            - name: Groq__ApiKey
+              valueFrom:
+                secretKeyRef:
+                  name: finance-tracker-secrets
+                  key: GROQ_API_KEY
+                  optional: true
+          # A CSV import runs in one database transaction inside one worker,
+          # so memory use grows with the file -- more headroom than the relay.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi

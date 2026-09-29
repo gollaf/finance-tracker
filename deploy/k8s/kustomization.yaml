@@ -18,6 +18,7 @@ resources:
   # once it has (their readiness check includes "all migrations applied").
   - migrate-job.yaml
   - api.yaml
+  - worker.yaml
 
 # RabbitMQ's extra configuration file, as a ConfigMap. Same hash-suffix
 # behavior as the Secret below: editing rabbitmq-memory.conf produces a new
