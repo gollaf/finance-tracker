@@ -5,9 +5,8 @@ using FluentValidation;
 namespace FinanceTracker.Application.Imports.StartImport
 {
     /// <summary>
-    /// Shape only, like the synchronous import's validator was: per-row
-    /// content is checked row by row during processing, where one bad row
-    /// is reported instead of failing the whole import.
+    /// Shape only: per-row content is checked during processing, where one
+    /// bad row is reported instead of failing the whole import.
     /// </summary>
     public sealed class StartImportCommandValidator : AbstractValidator<StartImportCommand>
     {

@@ -7,9 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace FinanceTracker.Api.UnitTests.Common
 {
     /// <summary>
-    /// Exhaustively checks ADR 0004's ErrorType-to-HTTP-status table so
-    /// that table has exactly one place it can drift from what's actually
-    /// implemented: this test file.
+    /// Checks every row of ADR 0004's ErrorType-to-HTTP-status table.
     /// </summary>
     public sealed class ResultExtensionsTests
     {
@@ -62,9 +60,7 @@ namespace FinanceTracker.Api.UnitTests.Common
         [Fact]
         public void ToActionResult_WithGenericResultOfT_AlsoMapsCorrectly()
         {
-            // Result<TValue> derives from Result, so the same extension
-            // method has to work when called through the generic type too
-            // -- this is what every real controller action actually does.
+            // Controllers call it on Result<TValue>, which derives from Result.
             Result<Guid> result = Result.Failure<Guid>(Error.NotFound("Account.NotFound", "No such account."));
 
             var actionResult = result.ToActionResult();

@@ -1,11 +1,9 @@
 namespace FinanceTracker.Infrastructure.Messaging
 {
     /// <summary>
-    /// One message ready to publish: the body is already-serialized JSON
-    /// (see MessageSerialization), not a typed object, because the publisher
-    /// never needs to know the CLR type -- only where to send the bytes. That
-    /// shape also matches what a message looks like after being stored and
-    /// read back as a row, rather than living in memory as an object.
+    /// One message ready to publish. The body is already-serialized JSON
+    /// (see MessageSerialization): the publisher never needs the CLR type,
+    /// and an outbox row stores the event in exactly this form.
     /// </summary>
     /// <param name="MessageId">
     /// Unique per logical message and stable across re-sends, so a consumer

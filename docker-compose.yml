@@ -9,11 +9,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-    # docker compose waits for this to report healthy -- not just "the
-    # container exists" -- before starting `api`. Without it, `api` would
-    # start immediately alongside Postgres and try to connect before
-    # Postgres has finished its own startup, since the app has no
-    # connection-retry logic of its own.
+    # `api` waits for this: the app has no connection retry of its own.
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d financetracker"]
       interval: 5s
@@ -21,34 +17,23 @@ services:
       retries: 10
 
   rabbitmq:
-    # The -management variant adds a browser UI at http://localhost:15672
-    # for inspecting exchanges, queues, and messages by hand. See
-    # docs/adr/0011-async-messaging-rabbitmq-raw-client.md.
+    # -management adds the browser UI at http://localhost:15672.
     image: rabbitmq:4-management
-    # RabbitMQ names its data directory after its node name, which comes
-    # from the container's hostname. Without a fixed hostname, every
-    # recreated container gets a new random one and starts from an empty
-    # data directory, silently ignoring whatever is in the volume below.
+    # RabbitMQ's data directory is named after the hostname; without a fixed
+    # one, a recreated container ignores the data in the volume.
     hostname: rabbitmq
     environment:
-      # Explicit credentials instead of the built-in "guest" user, which
-      # RabbitMQ itself only allows to connect from localhost -- this
-      # image relaxes that, but no other broker we'd deploy to would.
-      # Plaintext for the same reason as the Postgres credentials above:
-      # this broker is only reachable on your own machine (ADR 0008).
+      # Not the "guest" user, which RabbitMQ normally limits to localhost.
+      # Plaintext is fine: local development only (ADR 0008).
       RABBITMQ_DEFAULT_USER: financetracker
       RABBITMQ_DEFAULT_PASS: financetracker
     ports:
-      - "5672:5672"   # AMQP -- what the app's client library connects to
+      - "5672:5672"   # AMQP
       - "15672:15672" # management UI
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
-    # Same purpose as the postgres healthcheck: lets a service that needs
-    # the broker wait for it to actually accept connections, not just for
-    # the container to exist. check_port_connectivity (rather than the
-    # lighter "ping") is what verifies that: ping only proves the node's
-    # runtime responds, which can happen before the AMQP listener that
-    # clients connect to is open.
+    # check_port_connectivity, not ping: ping can succeed before the AMQP
+    # listener is open.
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
       interval: 10s
@@ -60,25 +45,12 @@ services:
       context: .
       dockerfile: src/FinanceTracker.Api/Dockerfile
     environment:
-      # Development here (not Production) is what makes Scalar/OpenAPI
-      # available at /scalar/v1 -- see Program.cs's app.Environment.IsDevelopment()
-      # check. This compose file is for local development; a real deploy
-      # (Phase 8) will need its own environment configuration.
+      # Development enables Scalar at /scalar/v1. This file is for local use only.
       ASPNETCORE_ENVIRONMENT: Development
-      # "postgres" here is not a placeholder -- it's the other service's
-      # name above, resolved via Docker's built-in DNS on the network
-      # compose creates automatically for this file. See the write-up for
-      # why this only works container-to-container, not from your host.
+      # "postgres" is the service name, resolved by compose's network DNS.
       ConnectionStrings__FinanceTracker: "Host=postgres;Port=5432;Database=financetracker;Username=postgres;Password=postgres"
-      # Unlike the Postgres credentials above, a Groq API key is a real
-      # secret tied to a personal account and free-tier quota -- it can't
-      # be hardcoded here the same way, even as a "local-only default"
-      # (see docs/adr/0010-ai-insights-provider-and-integration-design.md).
-      # ${GROQ_API_KEY:-} reads it from your shell environment, or from a
-      # gitignored .env file in this same directory (docker compose loads
-      # one automatically) -- e.g. a line reading GROQ_API_KEY=gsk_...
-      # Left unset, GetSpendingInsights still works: it just falls back to
-      # a templated, non-AI narrative instead of erroring.
+      # A real secret, so never hardcoded: read from the shell or a
+      # gitignored .env file (GROQ_API_KEY=gsk_...). Optional.
       Groq__ApiKey: ${GROQ_API_KEY:-}
     ports:
       - "5000:8080"
@@ -91,28 +63,15 @@ services:
       context: .
       dockerfile: src/FinanceTracker.Worker/Dockerfile
     environment:
-      # A non-web .NET host reads DOTNET_ENVIRONMENT, not
-      # ASPNETCORE_ENVIRONMENT like the api above -- and falls back to
-      # Production when it's unset.
+      # A non-web host reads DOTNET_ENVIRONMENT, not ASPNETCORE_ENVIRONMENT.
       DOTNET_ENVIRONMENT: Development
-      # Same connection string as the api: AddInfrastructure() refuses to
-      # start without one. "postgres" is the service name, resolved by
-      # compose's built-in DNS -- "localhost" here would mean this worker
-      # container itself.
       ConnectionStrings__FinanceTracker: "Host=postgres;Port=5432;Database=financetracker;Username=postgres;Password=postgres"
-      # Double underscore = one level of nesting: RabbitMq__Host is read as
-      # configuration key RabbitMq:Host (RabbitMqOptions.Host). "rabbitmq"
-      # is the service name again, and the credentials match the rabbitmq
-      # service's RABBITMQ_DEFAULT_USER / RABBITMQ_DEFAULT_PASS above.
+      # Must match RABBITMQ_DEFAULT_USER / RABBITMQ_DEFAULT_PASS above.
       RabbitMq__Host: rabbitmq
       RabbitMq__UserName: financetracker
       RabbitMq__Password: financetracker
-      # The worker is what calls Groq to categorize transactions, so it
-      # needs the key too -- same optional ${GROQ_API_KEY:-} as the api
-      # above. Unset, categorization just leaves transactions uncategorized.
+      # For AI categorization. Unset, transactions stay uncategorized.
       Groq__ApiKey: ${GROQ_API_KEY:-}
-    # No "ports:" -- nothing connects to the worker; it only connects out,
-    # to postgres and rabbitmq.
     depends_on:
       postgres:
         condition: service_healthy

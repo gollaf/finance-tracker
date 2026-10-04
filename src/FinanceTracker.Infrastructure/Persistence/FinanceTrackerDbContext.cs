@@ -10,10 +10,8 @@ using Microsoft.EntityFrameworkCore;
 namespace FinanceTracker.Infrastructure.Persistence
 {
     /// <summary>
-    /// EF Core DbContext for the Personal Finance Tracking bounded context.
-    /// Aggregates are added one at a time, each with its own
-    /// IEntityTypeConfiguration, DbSet, and migration, as Infrastructure's
-    /// repository implementations are built out.
+    /// EF Core DbContext for the application. Each aggregate's mapping lives
+    /// in its own IEntityTypeConfiguration under Configurations/.
     /// </summary>
     public sealed class FinanceTrackerDbContext : DbContext
     {
@@ -35,10 +33,8 @@ namespace FinanceTracker.Infrastructure.Persistence
         public DbSet<ImportJob> ImportJobs => Set<ImportJob>();
 
         /// <summary>
-        /// Not an aggregate: the transactional outbox's table, living in this
-        /// same DbContext on purpose, so an outbox row and the change it
-        /// describes are saved by one SaveChangesAsync, in one database
-        /// transaction. See docs/adr/0013-transactional-outbox.md.
+        /// Not an aggregate: the outbox table lives in this DbContext so an
+        /// outbox row and its change are saved in one transaction.
         /// </summary>
         public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 

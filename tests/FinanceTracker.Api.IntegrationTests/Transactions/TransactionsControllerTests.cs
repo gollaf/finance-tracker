@@ -16,12 +16,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FinanceTracker.Api.IntegrationTests.Transactions
 {
-    // There's no test here for AddTransaction against a closed Account
-    // (the 409 "Account.Closed" path in AddTransactionCommandHandler).
-    // AccountsController has no way to close an account yet -- Account.Close()
-    // exists in the domain, but no CloseAccount command/endpoint has been
-    // built on top of it, so that path isn't reachable through the API at
-    // all right now. Worth a small follow-up piece on AccountsController.
+    // AddTransaction against a closed Account (409) isn't tested here: the
+    // API has no endpoint to close an account. The handler's unit tests
+    // cover it.
     public sealed class TransactionsControllerTests : IClassFixture<CustomWebApplicationFactory>
     {
         private readonly HttpClient _client;
@@ -31,11 +28,8 @@ namespace FinanceTracker.Api.IntegrationTests.Transactions
             _client = factory.CreateClient();
         }
 
-        // ReadFromJsonAsync uses its own default JsonSerializerOptions, separate from
-        // the server's -- it has no idea Program.cs registered JsonStringEnumConverter
-        // there, so without this it fails to parse an enum the server sent back as a
-        // string (for example "Expense") because its default converter only accepts
-        // the underlying numeric value.
+        // The server sends enums as strings, which ReadFromJsonAsync's
+        // default options can't read.
         private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
         {
             Converters = { new JsonStringEnumConverter() },
@@ -453,11 +447,7 @@ namespace FinanceTracker.Api.IntegrationTests.Transactions
             body.Trends[0].CategoryName.Should().Be("Uncategorized");
             body.Trends[0].CurrentMonthTotal.Should().Be(25.00m);
 
-            // Confirms CustomWebApplicationFactory's ConfigureTestServices
-            // override actually took effect -- if it hadn't, this would be
-            // trying to reach the real Groq API with no API key configured
-            // and would fall back to a templated Narrative instead, per
-            // GetSpendingInsightsQueryHandler.
+            // Proves the stub replaced the real Groq client.
             body.NarrativeGeneratedByAi.Should().BeTrue();
             body.Narrative.Should().Be(StubInsightsGenerator.FixedNarrative);
         }
@@ -490,12 +480,9 @@ namespace FinanceTracker.Api.IntegrationTests.Transactions
             problem!.Status.Should().Be((int)HttpStatusCode.BadRequest);
         }
 
-        // The import itself runs in the Worker (ADR 0016), and there is no
-        // Worker in these tests -- so they cover what the Api is responsible
-        // for: parsing the file, validating the request, creating a Pending
-        // job with the right rows and parse errors, and answering 202 with
-        // where to poll. Processing is covered by ProcessImportJobCommand's
-        // unit tests and the Worker's end-to-end tests.
+        // The import runs in the Worker, which isn't part of these tests:
+        // they cover parsing, validation, the Pending job, and the 202.
+        // Processing is covered by the Worker's end-to-end tests.
 
         private async Task<ImportJobResponse> GetImportJobAsync(Uri location)
         {
@@ -602,9 +589,7 @@ namespace FinanceTracker.Api.IntegrationTests.Transactions
 
             response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
 
-            // The row errors travel as an extension member ("errors") of the
-            // ProblemDetails body -- read as raw JSON, since the ProblemDetails
-            // class itself only knows the standard members.
+            // "errors" is a ProblemDetails extension, so read raw JSON.
             using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             body.RootElement.GetProperty("title").GetString().Should().Be("Import.NoValidRows");
 

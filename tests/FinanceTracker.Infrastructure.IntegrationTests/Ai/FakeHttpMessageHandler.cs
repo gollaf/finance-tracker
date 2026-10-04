@@ -1,9 +1,8 @@
 namespace FinanceTracker.Infrastructure.IntegrationTests.Ai
 {
     /// <summary>
-    /// Stands in for HttpClient's real transport in GroqInsightsGeneratorTests
-    /// -- lets each test decide exactly what Groq "responds" with (or how
-    /// long it takes to respond) without a real network call.
+    /// Stands in for HttpClient's transport in the Groq client tests: each
+    /// test decides what Groq "responds" with, and how fast.
     /// </summary>
     internal sealed class FakeHttpMessageHandler : HttpMessageHandler
     {

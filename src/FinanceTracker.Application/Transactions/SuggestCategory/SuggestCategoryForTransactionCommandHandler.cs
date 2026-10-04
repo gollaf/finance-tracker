@@ -6,9 +6,9 @@ namespace FinanceTracker.Application.Transactions.SuggestCategory
 {
     /// <summary>
     /// See SuggestCategoryForTransactionCommand. Every check here exists so
-    /// this can run any number of times for the same Transaction -- messages
-    /// are delivered at least once (docs/adr/0012-rabbitmq-topology-and-delivery-guarantees.md)
-    /// -- and never override a Category someone else already chose.
+    /// this can run any number of times for the same Transaction (messages
+    /// are delivered at least once) and never override a Category someone
+    /// else already chose.
     /// </summary>
     public sealed class SuggestCategoryForTransactionCommandHandler
         : IRequestHandler<SuggestCategoryForTransactionCommand, Result<CategorySuggestionOutcome>>
@@ -59,17 +59,14 @@ namespace FinanceTracker.Application.Transactions.SuggestCategory
             if (suggestion.Value is not { } suggestedCategoryId)
                 return Result.Success(CategorySuggestionOutcome.NoSuitableCategory);
 
-            // Defense in depth: the port promises to only ever return one of
-            // the ids it was given, but this handler doesn't have to take an
-            // external AI integration's word for it -- an id that isn't in
-            // the list is never written.
+            // Defense in depth: never write an id that wasn't offered, even
+            // though the port promises not to return one.
             if (!options.Any(o => o.Id == suggestedCategoryId))
                 return Result.Success(CategorySuggestionOutcome.SuggestionUnavailable);
 
-            // Not transaction.Recategorize + UpdateAsync: the AI call above
-            // takes a second or two, and the user may have categorized this
-            // Transaction by hand during it. A conditional update ("only if
-            // still uncategorized") can't overwrite that; a plain one would.
+            // A conditional update, not Recategorize + UpdateAsync: the user
+            // may have categorized this Transaction by hand during the AI
+            // call, and a plain update would overwrite that.
             var updated = await _transactionRepository.TrySetCategoryIfUncategorizedAsync(
                 transaction.Id, suggestedCategoryId, cancellationToken);
 

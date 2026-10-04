@@ -11,12 +11,9 @@ using Testcontainers.RabbitMq;
 namespace FinanceTracker.Infrastructure.IntegrationTests.Messaging
 {
     /// <summary>
-    /// End-to-end behavior of the RabbitMQ plumbing against a real broker
-    /// (Testcontainers), the same image docker-compose.yml runs. These cover
-    /// what can't be unit-tested with fakes: the broker actually routing a
-    /// message, refusing an unroutable one, and dead-lettering a message that
-    /// keeps failing. Each test gets its own fresh broker (IAsyncLifetime
-    /// runs around every test), so no queue or message leaks between tests.
+    /// The RabbitMQ plumbing against a real broker: routing, refusing an
+    /// unroutable message, and dead-lettering one that keeps failing. Each
+    /// test gets its own broker.
     /// </summary>
     public sealed class RabbitMqMessagingTests : IAsyncLifetime
     {
@@ -44,8 +41,6 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Messaging
             var options = Options.Create(new RabbitMqOptions
             {
                 Host = _rabbitMq.Hostname,
-                // Docker maps the container's 5672 to a random free port on
-                // this machine, so that tests running in parallel never clash.
                 Port = _rabbitMq.GetMappedPublicPort(AmqpPort),
                 UserName = UserName,
                 Password = Password,
@@ -90,9 +85,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Messaging
         [Fact]
         public async Task Publish_WithNoQueueBoundToTheRoutingKey_Throws()
         {
-            // No queue declared at all: the exchange has nowhere to route
-            // this. Without mandatory: true the broker would silently drop
-            // it and the publish would look successful.
+            // No queue is bound, so mandatory: true must make this throw.
             var act = () => _publisher.PublishAsync(
                 ToOutgoing("test.nobody-listens", MessageSerialization.Serialize(new TestMessage(Guid.NewGuid(), "lost"))));
 

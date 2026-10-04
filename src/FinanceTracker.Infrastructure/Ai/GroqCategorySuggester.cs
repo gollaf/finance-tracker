@@ -13,8 +13,7 @@ namespace FinanceTracker.Infrastructure.Ai
 {
     /// <summary>
     /// ICategorySuggester over Groq's OpenAI-compatible chat completions
-    /// endpoint -- same provider, options, and HTTP error handling as
-    /// GroqInsightsGenerator. See docs/adr/0014-ai-transaction-categorization.md.
+    /// endpoint. See docs/adr/0014-ai-transaction-categorization.md.
     /// </summary>
     /// <remarks>
     /// The model never sees or returns a CategoryId. Categories are shown as
@@ -28,10 +27,9 @@ namespace FinanceTracker.Infrastructure.Ai
     {
         private const string ChatCompletionsPath = "openai/v1/chat/completions";
 
-        // Generous on purpose, even though the answer is a single number:
-        // the default model is a reasoning model, and its reasoning tokens
-        // count against this same limit. Too small a limit can be used up
-        // entirely by reasoning, leaving an empty answer.
+        // Generous although the answer is one number: the default model's
+        // reasoning tokens count against this limit too, and a small limit
+        // can be used up by reasoning alone, leaving an empty answer.
         private const int MaxTokens = 300;
 
         private const string SystemPrompt =
@@ -74,8 +72,7 @@ namespace FinanceTracker.Infrastructure.Ai
                     new GroqChatMessage("system", SystemPrompt),
                     new GroqChatMessage("user", BuildUserPrompt(request)),
                 },
-                // 0: the same input should give the same answer -- this is a
-                // classification, not creative writing.
+                // A classification: the same input should give the same answer.
                 Temperature: 0,
                 MaxTokens: MaxTokens);
 
@@ -103,8 +100,7 @@ namespace FinanceTracker.Infrastructure.Ai
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                // HttpClient.Timeout, not the caller cancelling -- see the
-                // same catch in GroqInsightsGenerator.
+                // HttpClient.Timeout expired; the caller didn't cancel.
                 _logger.LogWarning("Groq request timed out after {TimeoutSeconds}s.", _options.TimeoutSeconds);
                 return Result.Failure<CategoryId?>(Error.Failure("Groq.Timeout", "The request to Groq timed out."));
             }
@@ -119,9 +115,8 @@ namespace FinanceTracker.Infrastructure.Ai
 
         private Result<CategoryId?> ParseAnswer(string? answer, IReadOnlyList<CategoryOption> categories)
         {
-            // Accepts "3", " 3 ", "3." -- and nothing else. "Dining", "3 or 4"
-            // or "I think 3" are rejected instead of fished for a number:
-            // an answer that didn't follow the format is not trusted.
+            // Accepts "3", " 3 ", "3." and nothing else: an answer like
+            // "I think 3" didn't follow the format, so it isn't trusted.
             var match = answer is null ? Match.Empty : AnswerPattern().Match(answer);
 
             if (!match.Success
@@ -151,8 +146,6 @@ namespace FinanceTracker.Infrastructure.Ai
             return prompt.ToString();
         }
 
-        // Source-generated at compile time ([GeneratedRegex]), rather than
-        // parsed from the string on every call.
         [GeneratedRegex(@"^\s*(\d{1,4})\s*\.?\s*$")]
         private static partial Regex AnswerPattern();
     }

@@ -6,11 +6,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FinanceTracker.Api.CategorizationRules
 {
-    // Route uses a kebab-case segment ("categorization-rules") rather than
-    // AccountsController/CategoriesController's plain lowercased-word
-    // style -- those are both single words, so there was no separator to
-    // decide on yet. Kebab-case is the more standard REST convention for a
-    // multi-word resource name, and this is the first one.
     [ApiController]
     [Route("api/categorization-rules")]
     public sealed class CategorizationRulesController : ControllerBase

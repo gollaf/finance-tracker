@@ -6,11 +6,8 @@ using Testcontainers.PostgreSql;
 namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence
 {
     /// <summary>
-    /// The walking skeleton for Infrastructure: proves the whole
-    /// persistence pipeline works end to end against a real PostgreSQL
-    /// instance (per ADR 0001 — no in-memory/SQLite stand-in) before any
-    /// aggregate's repository is built on top of it. Each test gets its
-    /// own container so tests never share database state.
+    /// The persistence pipeline against a real PostgreSQL instance (no
+    /// in-memory stand-in). Each test gets its own container.
     /// </summary>
     public sealed class FinanceTrackerDbContextTests : IAsyncLifetime
     {
@@ -33,10 +30,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence
 
             var appliedMigrations = await context.Database.GetAppliedMigrationsAsync();
 
-            // Not a specific count: that would make this test break every
-            // time a new aggregate adds its own migration. What actually
-            // matters for a walking skeleton is that at least one migration
-            // really got applied against a real database.
+            // Not a specific count, so new migrations don't break this test.
             appliedMigrations.Should().NotBeEmpty();
         }
     }

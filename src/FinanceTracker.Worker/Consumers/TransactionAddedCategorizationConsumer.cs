@@ -8,12 +8,8 @@ namespace FinanceTracker.Worker.Consumers
 {
     /// <summary>
     /// Reacts to every TransactionAdded event by sending
-    /// SuggestCategoryForTransactionCommand. A thin inbound adapter -- the
-    /// messaging counterpart of an Api controller: it translates a message
-    /// into a MediatR command and contains no business logic of its own.
-    /// Acknowledging, retrying, dead-lettering, and the per-message DI
-    /// scope all come from RabbitMqConsumer (see
-    /// docs/adr/0012-rabbitmq-topology-and-delivery-guarantees.md).
+    /// SuggestCategoryForTransactionCommand -- the messaging counterpart of
+    /// an Api controller, with no business logic of its own.
     /// </summary>
     public sealed class TransactionAddedCategorizationConsumer : RabbitMqConsumer<TransactionAdded>
     {
@@ -26,12 +22,9 @@ namespace FinanceTracker.Worker.Consumers
         }
 
         /// <summary>
-        /// Named after what this consumer does, not after the event: another
-        /// consumer interested in "transaction.added" (say, budget alerts)
-        /// gets its own queue and its own copy of every event. Public and
-        /// static so AddWorker can register it for RabbitMqTopologyInitializer
-        /// to declare at startup, even in a process that doesn't run this
-        /// consumer.
+        /// Named after what the consumer does, not the event, so another
+        /// consumer of "transaction.added" gets its own queue. Static so
+        /// AddWorker can register it even where this consumer doesn't run.
         /// </summary>
         public static readonly ConsumerQueue Queue =
             new("finance-tracker.categorize-transaction", TransactionAdded.EventName);
@@ -51,12 +44,9 @@ namespace FinanceTracker.Worker.Consumers
                 new SuggestCategoryForTransactionCommand(new TransactionId(message.TransactionId)),
                 cancellationToken);
 
-            // The handler turns every expected situation -- including the AI
-            // being unavailable -- into a successful outcome. A failure here
-            // can only be a validation failure (an empty id): a malformed
-            // message that retrying won't fix. Throwing lets the queue's
-            // delivery limit move it to the dead-letter queue, where it is
-            // visible, instead of acknowledging it away silently.
+            // Expected situations, including the AI being unavailable, are
+            // successful outcomes, so a failure means a malformed message:
+            // throw so it ends up in the dead-letter queue, not acked silently.
             if (result.IsFailure)
             {
                 throw new InvalidOperationException(

@@ -5,13 +5,9 @@ using FinanceTracker.Infrastructure.Persistence;
 namespace FinanceTracker.Infrastructure.Outbox
 {
     /// <summary>
-    /// IOutbox implementation: stages the event as an OutboxMessage on the
-    /// same (Scoped, one-per-request) FinanceTrackerDbContext every
-    /// repository in this request/message scope also uses -- but does not
-    /// save it. The repository call that follows saves the change the event
-    /// describes, and EF Core's SaveChangesAsync writes everything tracked by
-    /// the context -- that change AND this outbox row -- in a single
-    /// database transaction. Both are committed, or neither is.
+    /// Stages the event as an OutboxMessage on the scope's shared DbContext
+    /// without saving it. The repository save that follows writes the change
+    /// and this row in one database transaction: both commit, or neither.
     /// </summary>
     public sealed class EfCoreOutbox : IOutbox
     {

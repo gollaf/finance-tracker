@@ -122,7 +122,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.GetSpendingInsights
 
             var result = await handler.Handle(query, CancellationToken.None);
 
-            // A failed AI call never fails the query -- see ADR 0010.
+            // A failed AI call never fails the query.
             result.IsSuccess.Should().BeTrue();
             result.Value.NarrativeGeneratedByAi.Should().BeFalse();
             result.Value.Narrative.Should().Contain("Groceries");

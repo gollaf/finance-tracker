@@ -6,23 +6,16 @@ using FinanceTracker.Domain.Transactions;
 namespace FinanceTracker.Api.Transactions
 {
     /// <summary>
-    /// Turns raw CSV text into ImportJobRows, the shape StartImportCommand
-    /// expects, each tagged with its line number in the file. Parsing the
-    /// uploaded file is I/O and belongs to the API layer (ADR 0006) --
-    /// Application only ever sees already-parsed rows.
+    /// Turns raw CSV text into ImportJobRows, each tagged with its row
+    /// number (ADR 0006: parsing the upload belongs to the Api).
     ///
-    /// Expects a header line (skipped, not validated) followed by data rows
-    /// shaped "Amount,Type,Description,OccurredOn", with OccurredOn as
-    /// yyyy-MM-dd. A field may be wrapped in double quotes to contain a
-    /// literal comma; a doubled "" inside a quoted field is an escaped
-    /// literal quote. Blank lines are skipped everywhere, including inside
-    /// the data, so RowNumber below counts surviving non-blank lines, not
-    /// strictly the file's own line count if it has gaps.
+    /// Expects a header line (skipped, not validated), then rows shaped
+    /// "Amount,Type,Description,OccurredOn" with OccurredOn as yyyy-MM-dd.
+    /// Quoted fields may contain commas, and "" is an escaped quote. Blank
+    /// lines are skipped and not counted in RowNumber.
     ///
-    /// A row that fails to parse is reported as an error and simply left
-    /// out of the rows to import -- the same "one bad row doesn't sink the
-    /// batch" philosophy ProcessImportJobCommandHandler applies to rows that
-    /// parse fine but fail a domain rule.
+    /// A row that fails to parse is reported as an error and left out; the
+    /// rest are still imported.
     /// </summary>
     internal static class CsvTransactionRowParser
     {
@@ -41,9 +34,7 @@ namespace FinanceTracker.Api.Transactions
             // lines[0] is the header -- skipped, not validated.
             for (var i = 1; i < lines.Count; i++)
             {
-                // i is 0-based and lines[0] is the header, so the header is
-                // row 1 and the first data row is row 2 -- as a user
-                // counting lines in their spreadsheet would number them.
+                // The header is row 1, so the first data row is row 2.
                 var rowNumber = i + 1;
                 var fields = SplitCsvLine(lines[i]);
 

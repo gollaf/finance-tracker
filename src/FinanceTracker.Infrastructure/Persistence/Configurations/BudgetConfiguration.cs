@@ -8,26 +8,14 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 namespace FinanceTracker.Infrastructure.Persistence.Configurations
 {
     /// <summary>
-    /// Maps Budget to its "Budgets" table. First aggregate to use EF Core's
-    /// ComplexProperty (EF Core 8+) rather than a plain converted scalar
-    /// column: LimitAmount (Money) and Period (BudgetPeriod) are each more
-    /// than one field, and ComplexProperty maps every field onto its own
-    /// column on this same table — no separate table, no shadow key. See
-    /// ADR 0003 (and its amendment on constructor binding).
-    ///
-    /// CategoryId is a plain converted column with no Domain navigation
-    /// property, but does get a real database-level foreign key constraint
-    /// back onto Categories, configured without a navigation property, per
-    /// ADR 0005.
-    ///
-    /// Deliberately no unique index on (CategoryId, Period) yet. "One
-    /// budget per category per period" is real (see docs/domain-model.md),
-    /// but nothing here is under test driving it, and I'd rather add a
-    /// database-level constraint alongside a test that actually proves it's
-    /// enforced than guess at one now. The Application layer's
-    /// GetByCategoryAndPeriodAsync check-before-insert is what currently
-    /// backs the rule.
+    /// Maps Budget to its "Budgets" table. LimitAmount and Period are complex
+    /// properties: their fields become columns on this table (ADR 0003).
+    /// CategoryId has a foreign key but no navigation property (ADR 0005).
     /// </summary>
+    /// <remarks>
+    /// "One budget per category per period" is enforced by
+    /// CreateBudgetCommandHandler, not by a unique index.
+    /// </remarks>
     public sealed class BudgetConfiguration : IEntityTypeConfiguration<Budget>
     {
         public void Configure(EntityTypeBuilder<Budget> builder)
@@ -64,9 +52,7 @@ namespace FinanceTracker.Infrastructure.Persistence.Configurations
                     .IsRequired();
             });
 
-            // Restrict rather than Cascade/SetNull: a Category still backing
-            // a Budget must not be deletable by silently orphaning the
-            // budget.
+            // Restrict: a Category with a Budget can't be deleted.
             builder.HasOne<Category>()
                 .WithMany()
                 .HasForeignKey(b => b.CategoryId)

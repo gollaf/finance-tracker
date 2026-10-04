@@ -8,16 +8,7 @@ using Testcontainers.PostgreSql;
 
 namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositories
 {
-    /// <summary>
-    /// Each test method gets its own fresh Postgres container (xUnit creates
-    /// a new CategoryRepositoryTests instance per [Fact]/[Theory] case, and
-    /// IAsyncLifetime runs around each one) — simplest possible isolation,
-    /// zero risk of one test's data leaking into another. It's also the
-    /// slowest possible option, since every test pays a full container
-    /// startup. Fine while there's one repository and a handful of tests;
-    /// worth revisiting with a shared container + reset-between-tests
-    /// approach once more aggregates make that cost noticeable.
-    /// </summary>
+    /// <summary>Each test gets its own Postgres container: slow, but fully isolated.</summary>
     public sealed class CategoryRepositoryTests : IAsyncLifetime
     {
         private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")

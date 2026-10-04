@@ -3,11 +3,8 @@ using FinanceTracker.Domain.Common;
 namespace FinanceTracker.Domain.Categorization
 {
     /// <summary>
-    /// Domain service: matches a Transaction description against an ordered
-    /// set of CategorizationRules. Stateless because it operates across many
-    /// CategorizationRule instances rather than belonging to one aggregate.
-    /// Rule-based matching only — there is no AI-assisted fallback for
-    /// unmatched transactions in this codebase.
+    /// Matches a Transaction description against a set of CategorizationRules;
+    /// the matching rule with the lowest Priority wins.
     /// </summary>
     public static class TransactionCategorizer
     {

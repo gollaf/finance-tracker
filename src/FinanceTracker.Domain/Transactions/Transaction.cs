@@ -47,15 +47,9 @@ namespace FinanceTracker.Domain.Transactions
             CreatedAt = createdAt;
         }
 
-        // Used only by EF Core to materialize a Transaction loaded from
-        // the database. Amount is mapped as an EF Core complex property
-        // (see docs/adr/0003-ef-core-persistence-mapping.md and its
-        // amendment), and EF Core's constructor binding can never pass a
-        // complex-typed value into a constructor parameter -- only the
-        // scalar/converted ones. This constructor exists purely so a
-        // constructor EF Core CAN use (binding everything except Amount)
-        // is available; Domain code itself only ever calls the
-        // eight-parameter constructor above, which then sets Amount too.
+        // For EF Core only: Amount is a complex property, which EF Core
+        // cannot bind through a constructor, so it needs one without it and
+        // sets it afterwards.
         private Transaction(
             TransactionId id,
             AccountId accountId,

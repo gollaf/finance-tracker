@@ -25,14 +25,9 @@ namespace FinanceTracker.Domain.Budgets
             LimitAmount = limitAmount;
         }
 
-        // Used only by EF Core to materialize a Budget loaded from the
-        // database. Period and LimitAmount are mapped as EF Core complex
-        // properties (see docs/adr/0003-ef-core-persistence-mapping.md), and
-        // EF Core's constructor binding can never pass a complex-typed value
-        // into a constructor parameter -- it can only set one via a property
-        // afterward. This constructor exists purely so a constructor EF Core
-        // CAN use (binding only Id and CategoryId) is available; Domain code
-        // itself only ever calls the four-parameter constructor above.
+        // For EF Core only: Period and LimitAmount are complex properties,
+        // which EF Core cannot bind through a constructor, so it needs one
+        // without them and sets them afterwards.
         private Budget(BudgetId id, CategoryId categoryId)
         {
             Id = id;

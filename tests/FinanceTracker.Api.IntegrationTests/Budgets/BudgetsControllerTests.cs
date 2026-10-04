@@ -8,10 +8,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace FinanceTracker.Api.IntegrationTests.Budgets
 {
     /// <summary>
-    /// Each test uses its own freshly-created Category (and often its own
-    /// Year/Month) so tests sharing this class's database don't collide on
-    /// CreateBudget's real category+period uniqueness rule -- same reasoning
-    /// as CategoriesControllerTests' Guid-suffixed names.
+    /// Each test uses its own new Category so tests sharing this class's
+    /// database don't collide on the one-budget-per-category-per-period rule.
     /// </summary>
     public sealed class BudgetsControllerTests : IClassFixture<CustomWebApplicationFactory>
     {

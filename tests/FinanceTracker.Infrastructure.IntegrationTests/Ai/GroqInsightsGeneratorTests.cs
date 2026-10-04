@@ -12,12 +12,8 @@ using Microsoft.Extensions.Options;
 namespace FinanceTracker.Infrastructure.IntegrationTests.Ai
 {
     /// <summary>
-    /// No real network call and no Docker -- HttpClient's message handler is
-    /// substituted with FakeHttpMessageHandler, so these run in
-    /// milliseconds. Filed under Infrastructure.IntegrationTests because
-    /// that's this solution's only Infrastructure test project (see
-    /// CompositionRootTests' own doc comment for the same situation), not
-    /// because anything here actually reaches a real dependency.
+    /// No real network call and no Docker: HttpClient's handler is a
+    /// FakeHttpMessageHandler.
     /// </summary>
     public sealed class GroqInsightsGeneratorTests
     {
@@ -129,10 +125,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Ai
         {
             var handler = new FakeHttpMessageHandler(async (_, cancellationToken) =>
             {
-                // Longer than the client's own Timeout below -- HttpClient
-                // cancels the request itself once Timeout elapses, which is
-                // exactly the scenario this test is proving GroqInsightsGenerator
-                // turns into a Result.Failure rather than an unhandled exception.
+                // Longer than the client's Timeout below, so HttpClient times out.
                 await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
                 return new HttpResponseMessage(HttpStatusCode.OK);
             });

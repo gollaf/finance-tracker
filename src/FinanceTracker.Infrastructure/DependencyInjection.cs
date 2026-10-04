@@ -19,11 +19,7 @@ using Microsoft.Extensions.Options;
 namespace FinanceTracker.Infrastructure
 {
     /// <summary>
-    /// Composition root for this layer: registers FinanceTrackerDbContext
-    /// and every repository implementation against the Application-layer
-    /// interface it satisfies. Mirrors FinanceTracker.Application's own
-    /// AddApplication() extension method, called the same way from
-    /// Api/Program.cs.
+    /// Registers this layer's implementations of the Application ports.
     /// </summary>
     public static class DependencyInjection
     {
@@ -38,12 +34,6 @@ namespace FinanceTracker.Infrastructure
 
             services.AddDbContext<FinanceTrackerDbContext>(options => options.UseNpgsql(connectionString));
 
-            // Scoped, not Singleton: each repository holds a reference to
-            // FinanceTrackerDbContext, and AddDbContext registers that as
-            // Scoped (one instance per HTTP request) by default. A
-            // Singleton repository would capture a DbContext instance from
-            // whichever request created it first and keep reusing it
-            // forever -- a classic and hard-to-diagnose bug.
             services.AddScoped<IAccountRepository, AccountRepository>();
             services.AddScoped<ICategoryRepository, CategoryRepository>();
             services.AddScoped<ICategorizationRuleRepository, CategorizationRuleRepository>();
@@ -55,27 +45,14 @@ namespace FinanceTracker.Infrastructure
             // be opened on the same DbContext they save through.
             services.AddScoped<IUnitOfWork, EfCoreUnitOfWork>();
 
-            // Scoped for the same reason as the repositories: it has to
-            // share the one FinanceTrackerDbContext of the current request
-            // (or message) with them -- that shared context is what makes
-            // an outbox row and the change it describes commit together.
+            // Shares the scope's DbContext with the repositories, which is
+            // what makes an outbox row commit together with its change.
             services.AddScoped<IOutbox, EfCoreOutbox>();
 
-            // GroqOptions.ApiKey is intentionally allowed to bind empty --
-            // GroqInsightsGenerator treats a missing key as a non-fatal
-            // Result.Failure, not a startup crash. See
-            // docs/adr/0010-ai-insights-provider-and-integration-design.md.
+            // No validation: an empty ApiKey is allowed and handled at call time.
             services.AddOptions<GroqOptions>()
                 .Bind(configuration.GetSection(GroqOptions.SectionName));
 
-            // A typed HttpClient, not a bare "new HttpClient()" inside
-            // GroqInsightsGenerator: AddHttpClient hands out pooled,
-            // reused HttpMessageHandlers instead of one per instance,
-            // which avoids the socket-exhaustion problem a
-            // manually-constructed HttpClient is famous for under load.
-            // The configure callback reads GroqOptions back out of the
-            // same IServiceProvider building this client, so
-            // TimeoutSeconds only has to be set in one place.
             services.AddHttpClient<IInsightsGenerator, GroqInsightsGenerator>((serviceProvider, client) =>
             {
                 var groqOptions = serviceProvider.GetRequiredService<IOptions<GroqOptions>>().Value;
@@ -83,9 +60,6 @@ namespace FinanceTracker.Infrastructure
                 client.Timeout = TimeSpan.FromSeconds(groqOptions.TimeoutSeconds);
             });
 
-            // Same Groq endpoint, options, and timeout as above; a separate
-            // typed client because it's a separate port. See
-            // docs/adr/0014-ai-transaction-categorization.md.
             services.AddHttpClient<ICategorySuggester, GroqCategorySuggester>((serviceProvider, client) =>
             {
                 var groqOptions = serviceProvider.GetRequiredService<IOptions<GroqOptions>>().Value;
@@ -98,15 +72,9 @@ namespace FinanceTracker.Infrastructure
 
         /// <summary>
         /// Registers the RabbitMQ plumbing: one shared connection, the
-        /// publisher, and a startup step that declares the shared exchanges
-        /// and every registered ConsumerQueue. The OutboxRelay is registered
-        /// separately, by AddOutboxRelay, so a process can talk to the broker
-        /// without also running the relay.
-        /// Separate from AddInfrastructure on purpose -- only a process that
-        /// actually talks to the broker (the Worker) calls this. The Api
-        /// never does: it only records events in the database, and never
-        /// needs RabbitMQ configuration or a broker connection at all. See
-        /// docs/adr/0011-async-messaging-rabbitmq-raw-client.md.
+        /// publisher, and a startup step that declares the exchanges and every
+        /// registered ConsumerQueue. Only the Worker calls this; the Api just
+        /// writes events to the outbox and never connects to the broker.
         /// </summary>
         public static IServiceCollection AddRabbitMqMessaging(this IServiceCollection services, IConfiguration configuration)
         {
@@ -121,9 +89,8 @@ namespace FinanceTracker.Infrastructure
                     "or the RabbitMq__UserName / RabbitMq__Password environment variables in docker-compose.yml.")
                 .ValidateOnStart();
 
-            // Singletons: the connection is meant to live as long as the
-            // process (see RabbitMqConnectionProvider), and the publisher
-            // holds one long-lived channel on top of it.
+            // Singletons: one long-lived connection, and one long-lived
+            // publisher channel on top of it.
             services.AddSingleton<RabbitMqConnectionProvider>();
             services.AddSingleton<IMessagePublisher, RabbitMqPublisher>();
 
@@ -134,14 +101,9 @@ namespace FinanceTracker.Infrastructure
 
         /// <summary>
         /// Registers the OutboxRelay, which publishes stored integration
-        /// events. It reads the outbox through FinanceTrackerDbContext and
-        /// publishes through IMessagePublisher, so it needs both
-        /// AddInfrastructure and AddRabbitMqMessaging as well.
-        /// Kept apart from AddRabbitMqMessaging because the relay is meant to
-        /// run in exactly one process at a time (docs/adr/0013-transactional-outbox.md),
-        /// while consumers can run in as many as needed -- so whether a
-        /// process runs it is that process's own decision. See
-        /// docs/adr/0018-worker-roles.md.
+        /// events; it needs AddInfrastructure and AddRabbitMqMessaging too.
+        /// Separate because exactly one process should run the relay, while
+        /// consumers can run in many. See docs/adr/0018-worker-roles.md.
         /// </summary>
         public static IServiceCollection AddOutboxRelay(this IServiceCollection services)
         {

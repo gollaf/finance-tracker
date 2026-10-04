@@ -16,18 +16,12 @@ namespace FinanceTracker.Infrastructure.Outbox
     /// </summary>
     /// <remarks>
     /// Delivery is at-least-once: if this process stops after a publish was
-    /// confirmed but before ProcessedAt was saved, the same row is published
-    /// again next time. Consumers are idempotent for exactly this reason
-    /// (docs/adr/0012-rabbitmq-topology-and-delivery-guarantees.md). The
-    /// row's Id is sent as the MessageId, so a duplicate is recognizable.
+    /// confirmed but before ProcessedAt was saved, the row is published again,
+    /// with the same MessageId. Consumers are idempotent for this reason.
     ///
-    /// Assumes a single running relay. Two instances polling the same table
-    /// could both pick up the same row and publish it twice -- still
-    /// correct, given idempotent consumers, but wasteful. Scaling the Worker
-    /// therefore scales only its consumers: the relay is a separate role
-    /// that a deployment runs exactly once (docs/adr/0018-worker-roles.md).
-    /// Running several relays at once would call for row locking
-    /// (SELECT ... FOR UPDATE SKIP LOCKED) here.
+    /// Assumes a single running relay. Two would both publish the same rows
+    /// (still correct, but wasteful); supporting that would need
+    /// SELECT ... FOR UPDATE SKIP LOCKED here.
     /// </remarks>
     public sealed class OutboxRelay : BackgroundService
     {
@@ -67,18 +61,14 @@ namespace FinanceTracker.Infrastructure.Outbox
                     }
                     catch (Exception ex) when (IsMissingOutboxTable(ex))
                     {
-                        // Only the Api applies migrations (ADR 0008, or its
-                        // `migrate` command, ADR 0017), and this process can
-                        // start before that has happened. Expected for a few
-                        // seconds after a fresh start.
+                        // Migrations are applied by the Api, which may start
+                        // after this process. Expected briefly on a fresh start.
                         _logger.LogInformation(
                             "Outbox table does not exist yet (migrations have not been applied); retrying.");
                     }
                     catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
                     {
-                        // Anything else (database briefly unreachable, ...):
-                        // log and try again on the next tick rather than
-                        // letting one bad poll stop the relay for good.
+                        // E.g. the database is briefly unreachable: retry next tick.
                         _logger.LogError(ex, "Outbox relay poll failed; retrying in {PollInterval}.", PollInterval);
                     }
                 }
@@ -97,9 +87,7 @@ namespace FinanceTracker.Infrastructure.Outbox
         /// </summary>
         public async Task<int> PublishPendingAsync(CancellationToken cancellationToken = default)
         {
-            // A fresh scope, and so a fresh DbContext, per poll: this relay
-            // lives as long as the process, a DbContext is meant to be short-
-            // lived (its change tracker only grows).
+            // A fresh DbContext per poll; this relay lives as long as the process.
             await using var scope = _scopeFactory.CreateAsyncScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<FinanceTrackerDbContext>();
 
@@ -140,12 +128,9 @@ namespace FinanceTracker.Infrastructure.Outbox
                     }
                 }
 
-                // Saved after every message, not once per batch, so a crash
-                // halfway through a batch doesn't republish the messages
-                // already confirmed. CancellationToken.None on purpose: once
-                // the broker has confirmed a message, recording that is worth
-                // finishing even if shutdown was requested meanwhile --
-                // skipping it just guarantees a duplicate publish later.
+                // Saved per message so a crash mid-batch doesn't republish
+                // confirmed ones. CancellationToken.None: once the broker has
+                // confirmed, recording it is worth finishing during shutdown.
                 await dbContext.SaveChangesAsync(CancellationToken.None);
             }
 

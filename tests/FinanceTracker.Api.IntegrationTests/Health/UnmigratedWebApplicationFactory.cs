@@ -15,11 +15,9 @@ namespace FinanceTracker.Api.IntegrationTests.Health
     /// that way until a test calls <see cref="ApplyMigrationsAsync"/> --
     /// the in-process equivalent of running the `migrate` command.
     ///
-    /// The connection string uses the same environment-variable workaround
-    /// as CustomWebApplicationFactory, for the same reason (see its doc
-    /// comment). The migration switch doesn't need it: Program.cs reads that
-    /// one after Build(), by which point ConfigureAppConfiguration below has
-    /// been applied.
+    /// The connection string uses the same environment variable as
+    /// CustomWebApplicationFactory. The migration switch doesn't need it:
+    /// Program.cs reads that one after Build().
     /// </summary>
     public sealed class UnmigratedWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
     {

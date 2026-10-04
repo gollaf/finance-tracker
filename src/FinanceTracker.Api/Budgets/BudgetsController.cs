@@ -35,11 +35,6 @@ namespace FinanceTracker.Api.Budgets
             return Created($"/api/budgets/{budgetId}", response);
         }
 
-        // UpdateBudget only ever returns a plain Result (no value to hand
-        // back) and there's nothing sensible to put in a body -- the
-        // caller already knows the LimitAmount it just sent -- so success
-        // here is 204 No Content, the conventional shape for "the update
-        // happened, there's nothing to return."
         [HttpPut("{id:guid}")]
         public async Task<IActionResult> Update(Guid id, UpdateBudgetRequest request, CancellationToken cancellationToken)
         {

@@ -1,8 +1,4 @@
-# A namespace is a folder for objects inside one cluster: names only have to
-# be unique within it, and `kubectl delete namespace finance-tracker` removes
-# everything this project created in one command. Listed first in
-# kustomization.yaml, and applied first by kubectl regardless, because every
-# other object here lives inside it.
+# `kubectl delete namespace finance-tracker` removes everything at once.
 apiVersion: v1
 kind: Namespace
 metadata:

@@ -5,22 +5,14 @@ using RabbitMQ.Client;
 namespace FinanceTracker.Infrastructure.Messaging
 {
     /// <summary>
-    /// Connects to RabbitMQ at startup, declares the shared exchanges and
-    /// every ConsumerQueue registered in DI, then finishes. Makes a broken
-    /// broker connection (wrong host, wrong credentials) visible in the logs
-    /// the moment the process starts, instead of only when the first message
-    /// is published or consumed. Runs as a BackgroundService so the
-    /// connection retry in RabbitMqConnectionProvider never blocks the rest
-    /// of the host from starting.
+    /// Connects to RabbitMQ at startup, declares the exchanges and every
+    /// ConsumerQueue registered in DI, then finishes. A broken broker
+    /// connection shows up in the logs right at startup. A BackgroundService,
+    /// so the connection retry never blocks the host from starting.
     /// </summary>
     /// <remarks>
-    /// Declaring the queues here, and not only in each consumer, is what
-    /// lets a process that only publishes (the outbox relay running on its
-    /// own) start before any consumer has: the queues exist from the moment
-    /// any process that knows about them has started, and hold messages
-    /// until a consumer comes along. The consumers still declare their own
-    /// queue too -- declaring is idempotent, and it keeps each consumer
-    /// self-sufficient.
+    /// Declaring the queues here, not only in each consumer, means they exist
+    /// even when the outbox relay runs on its own before any consumer starts.
     /// </remarks>
     public sealed class RabbitMqTopologyInitializer : BackgroundService
     {

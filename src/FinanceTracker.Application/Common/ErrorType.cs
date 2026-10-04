@@ -1,6 +1,6 @@
 namespace FinanceTracker.Application.Common
 {
-    /// <summary>How the Api layer should map a failed Result once it exists (e.g. NotFound -> 404).</summary>
+    /// <summary>What kind of failure an Error is; the Api maps each one to an HTTP status (e.g. NotFound -> 404).</summary>
     public enum ErrorType
     {
         None,

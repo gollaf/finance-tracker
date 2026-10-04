@@ -12,7 +12,7 @@ namespace FinanceTracker.Infrastructure.Messaging
     /// one channel, declares its own queue, and turns each delivery into a
     /// call to HandleAsync. A subclass only says which queue and routing key
     /// it wants and what to do with one message; acknowledgement, retries,
-    /// dead-lettering, and DI scoping all live here, once.
+    /// dead-lettering, and DI scoping live here.
     /// See docs/adr/0012-rabbitmq-topology-and-delivery-guarantees.md.
     /// </summary>
     /// <remarks>
@@ -71,28 +71,18 @@ namespace FinanceTracker.Infrastructure.Messaging
                 await RabbitMqTopology.DeclareConsumerQueueAsync(
                     channel, QueueName, RoutingKey, DeliveryLimit, stoppingToken);
 
-                // Prefetch 1: the broker hands this consumer one message at
-                // a time and sends the next only after the previous one is
-                // acked or rejected. Without a limit it would push the whole
-                // queue into this process's memory at once -- and all of
-                // those would be redelivered if the process crashed.
+                // One unacknowledged message at a time.
                 await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false, stoppingToken);
 
                 var consumer = new AsyncEventingBasicConsumer(channel);
                 consumer.ReceivedAsync += (_, delivery) => OnReceivedAsync(channel, delivery, stoppingToken);
 
-                // autoAck: false -- the broker keeps each message until this
-                // code explicitly acks it. With autoAck: true it would be
-                // deleted the moment it was sent, and lost if HandleAsync
-                // then failed or the process crashed mid-way.
                 await channel.BasicConsumeAsync(QueueName, autoAck: false, consumer: consumer, cancellationToken: stoppingToken);
 
                 Logger.LogInformation(
                     "Consuming from queue {Queue} (routing key {RoutingKey}).", QueueName, RoutingKey);
 
-                // Messages arrive through the ReceivedAsync callback above,
-                // not through this method -- it only needs to stay running
-                // until the host stops.
+                // Messages arrive through the callback; just keep running.
                 await Task.Delay(Timeout.Infinite, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -103,9 +93,8 @@ namespace FinanceTracker.Infrastructure.Messaging
 
         private async Task OnReceivedAsync(IChannel channel, BasicDeliverEventArgs delivery, CancellationToken stoppingToken)
         {
-            // Body is only valid for the duration of this callback (the
-            // client reuses the underlying buffer), which is fine here: it
-            // is deserialized immediately, before anything else is awaited.
+            // Body is only valid during this callback (the client reuses the
+            // buffer), so deserialize before awaiting anything.
             TMessage? message;
             try
             {
@@ -130,12 +119,7 @@ namespace FinanceTracker.Infrastructure.Messaging
 
                 try
                 {
-                    // One DI scope per message, exactly like ASP.NET Core
-                    // creates one per HTTP request. This consumer is a
-                    // Singleton (every hosted service is); resolving Scoped
-                    // services such as DbContext or repositories straight
-                    // from the root provider would share one DbContext
-                    // across every message for the life of the process.
+                    // One DI scope (and DbContext) per message.
                     await using var scope = _scopeFactory.CreateAsyncScope();
                     await HandleAsync(message, scope.ServiceProvider, stoppingToken);
 
@@ -163,10 +147,8 @@ namespace FinanceTracker.Infrastructure.Messaging
             }
             catch (Exception ex)
             {
-                // The ack/reject itself failed -- typically because the
-                // connection dropped. Nothing more can be done from here:
-                // the broker still holds the message as unacknowledged and
-                // will redeliver it (which is why handlers are idempotent).
+                // The ack/reject itself failed (connection dropped). The broker
+                // still holds the message and will redeliver it.
                 Logger.LogError(ex, "Could not acknowledge message {MessageId} on {Queue}.",
                     delivery.BasicProperties.MessageId, QueueName);
             }

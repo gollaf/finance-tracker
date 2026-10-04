@@ -8,12 +8,8 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 namespace FinanceTracker.Infrastructure.Persistence.Configurations
 {
     /// <summary>
-    /// Maps CategorizationRule to its "CategorizationRules" table.
-    /// CategoryId is a plain converted column with no Domain navigation
-    /// property, same reasoning as CategoryConfiguration.ParentCategoryId,
-    /// but it does get a real database-level foreign key constraint back
-    /// onto Categories, configured without a navigation property, per
-    /// ADR 0005.
+    /// Maps CategorizationRule to its "CategorizationRules" table. CategoryId
+    /// has a foreign key but no navigation property (ADR 0005).
     /// </summary>
     public sealed class CategorizationRuleConfiguration : IEntityTypeConfiguration<CategorizationRule>
     {
@@ -37,9 +33,7 @@ namespace FinanceTracker.Infrastructure.Persistence.Configurations
             builder.Property(r => r.Priority)
                 .IsRequired();
 
-            // Restrict rather than Cascade/SetNull: a Category still backing
-            // a CategorizationRule must not be deletable by silently
-            // orphaning the rule.
+            // Restrict: a Category used by a rule can't be deleted.
             builder.HasOne<Category>()
                 .WithMany()
                 .HasForeignKey(r => r.CategoryId)

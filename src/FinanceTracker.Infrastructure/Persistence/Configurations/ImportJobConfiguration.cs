@@ -51,9 +51,7 @@ namespace FinanceTracker.Infrastructure.Persistence.Configurations
 
             builder.Property(j => j.CompletedAt);
 
-            // Same cross-aggregate reference rule as Transaction (ADR 0005):
-            // a real foreign key, no navigation property, and an Account
-            // with import history can't be deleted out from under it.
+            // Restrict: an Account with import history can't be deleted.
             builder.HasOne<Account>()
                 .WithMany()
                 .HasForeignKey(j => j.AccountId)

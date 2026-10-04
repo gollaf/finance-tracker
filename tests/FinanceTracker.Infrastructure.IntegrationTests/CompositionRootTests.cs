@@ -22,24 +22,9 @@ using Microsoft.Extensions.Hosting;
 namespace FinanceTracker.Infrastructure.IntegrationTests
 {
     /// <summary>
-    /// Verifies AddApplication() + AddInfrastructure() together produce a
-    /// working DI container -- the same composition Api/Program.cs performs
-    /// -- without needing a real, reachable database. Registering
-    /// FinanceTrackerDbContext with a connection string doesn't open a
-    /// connection; that only happens on the first real query. So this test
-    /// can use a syntactically valid but nonexistent connection string and
-    /// still prove every repository resolves, with no Docker/Testcontainers
-    /// needed -- unlike everything else in this project, it runs in
-    /// milliseconds.
-    ///
-    /// Scope: this proves every repository interface and IMediator itself
-    /// resolve correctly. It does not individually construct every
-    /// command/query handler through DI (that would mean reflecting over
-    /// every IRequestHandler&lt;,&gt; registration) -- each handler is
-    /// already exercised directly, wired with NSubstitute mocks, in its own
-    /// Application unit test. Worth revisiting only if the handler count
-    /// grows large enough that a registration mistake there becomes a real,
-    /// separate risk.
+    /// AddApplication() + AddInfrastructure() produce a working DI container.
+    /// Registering the DbContext doesn't open a connection, so a fake
+    /// connection string is enough and no container is needed.
     /// </summary>
     public sealed class CompositionRootTests
     {
@@ -58,11 +43,8 @@ namespace FinanceTracker.Infrastructure.IntegrationTests
                 .AddApplication()
                 .AddInfrastructure(configuration);
 
-            // validateScopes: true reproduces ASP.NET Core's own default
-            // behavior in Development -- it throws at resolution time if a
-            // longer-lived service (e.g. Singleton) ends up capturing a
-            // shorter-lived one (e.g. our Scoped repositories/DbContext), a
-            // real and otherwise-silent bug class.
+            // Like ASP.NET Core in Development: fail if a Singleton captures
+            // a Scoped service.
             return services.BuildServiceProvider(validateScopes: true);
         }
 
@@ -101,20 +83,15 @@ namespace FinanceTracker.Infrastructure.IntegrationTests
         }
 
         /// <summary>
-        /// AddRabbitMqMessaging registers without connecting: nothing touches
-        /// the network until something first asks RabbitMqConnectionProvider
-        /// for a connection, so -- like the database registrations above --
-        /// this runs with no broker at all.
+        /// AddRabbitMqMessaging doesn't connect at registration, so no broker
+        /// is needed.
         /// </summary>
         [Fact]
         public async Task AddRabbitMqMessaging_RegistersPublisherAndTopologyInitializer_ButNotTheOutboxRelay()
         {
             var services = CreateMessagingServices();
 
-            // await using, not using: RabbitMqPublisher and
-            // RabbitMqConnectionProvider only implement IAsyncDisposable, and
-            // a synchronous ServiceProvider.Dispose() throws when it reaches
-            // a singleton like that.
+            // await using: some singletons are only IAsyncDisposable.
             await using var provider = services.BuildServiceProvider(validateScopes: true);
 
             provider.GetService<IMessagePublisher>().Should().BeOfType<RabbitMqPublisher>();

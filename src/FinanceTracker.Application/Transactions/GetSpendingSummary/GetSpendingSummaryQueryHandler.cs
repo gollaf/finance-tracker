@@ -7,11 +7,6 @@ using MediatR;
 
 namespace FinanceTracker.Application.Transactions.GetSpendingSummary
 {
-    /// <summary>
-    /// Scoped to one Account, same as GetAccountBalance and GetTransactions —
-    /// a true across-all-accounts summary would need IAccountRepository to
-    /// list every account, which it doesn't support yet.
-    /// </summary>
     public sealed class GetSpendingSummaryQueryHandler
         : IRequestHandler<GetSpendingSummaryQuery, Result<IReadOnlyList<CategorySpendingDto>>>
     {

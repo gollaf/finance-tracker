@@ -4,8 +4,7 @@ namespace FinanceTracker.Domain.Categorization
 {
     /// <summary>
     /// A pattern matched against a Transaction's description to suggest a
-    /// Category automatically. Matches against explicit rules only — there is
-    /// no AI-assisted fallback for unmatched transactions in this codebase.
+    /// Category automatically.
     /// </summary>
     public sealed class CategorizationRule
     {
