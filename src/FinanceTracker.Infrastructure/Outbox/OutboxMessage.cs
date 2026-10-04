@@ -2,9 +2,8 @@ namespace FinanceTracker.Infrastructure.Outbox
 {
     /// <summary>
     /// One row of the transactional outbox: an integration event waiting to
-    /// be (or already) published to RabbitMQ. A persistence concern, not a
-    /// business concept -- which is why it lives in Infrastructure rather
-    /// than Domain. See docs/adr/0013-transactional-outbox.md.
+    /// be (or already) published to RabbitMQ. See
+    /// docs/adr/0013-transactional-outbox.md.
     /// </summary>
     public sealed class OutboxMessage
     {

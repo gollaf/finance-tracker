@@ -16,8 +16,7 @@ namespace FinanceTracker.Application.Imports.ProcessImport
     /// See ProcessImportJobCommand.
     /// </summary>
     /// <remarks>
-    /// Like the synchronous import it replaces, this handler catches a
-    /// domain exception on purpose: the rows are untrusted external data, so
+    /// Catches a domain exception on purpose: the rows are untrusted external data, so
     /// a row failing a domain rule (Transaction.Create throwing
     /// ArgumentException) is an expected outcome, reported on the job, not a
     /// bug. Any OTHER exception -- the database becoming unreachable, say --

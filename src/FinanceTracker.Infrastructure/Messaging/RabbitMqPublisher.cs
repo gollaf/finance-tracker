@@ -8,17 +8,9 @@ namespace FinanceTracker.Infrastructure.Messaging
     /// confirmations enabled.
     /// </summary>
     /// <remarks>
-    /// Without publisher confirmations, BasicPublishAsync returns as soon as
-    /// the bytes are written to the socket -- before the broker has stored
-    /// anything. A broker crash, a full disk, or a dropped connection at that
-    /// moment loses the message with no error on this side. With
-    /// confirmations tracking enabled, BasicPublishAsync instead waits for
-    /// the broker's ack and throws a PublishException if the broker says no.
-    ///
-    /// mandatory: true covers the other silent-loss case: a message whose
-    /// routing key matches no bound queue is normally just dropped by the
-    /// exchange. With mandatory it is returned instead, which surfaces here
-    /// as a PublishReturnException.
+    /// Publisher confirmations make BasicPublishAsync wait for the broker's
+    /// ack and throw if it refuses the message. mandatory: true makes a
+    /// message that matches no queue throw instead of being dropped silently.
     /// </remarks>
     public sealed class RabbitMqPublisher : IMessagePublisher, IAsyncDisposable
     {
@@ -47,9 +39,7 @@ namespace FinanceTracker.Infrastructure.Messaging
                 var properties = new BasicProperties
                 {
                     ContentType = "application/json",
-                    // Written to disk by the broker, not only kept in
-                    // memory, so it survives a broker restart while it
-                    // waits in a (durable) queue.
+                    // Survives a broker restart while waiting in a queue.
                     Persistent = true,
                     MessageId = message.MessageId.ToString(),
                     Type = message.Type,
@@ -71,10 +61,8 @@ namespace FinanceTracker.Infrastructure.Messaging
 
         private async Task<IChannel> GetOpenChannelAsync(CancellationToken cancellationToken)
         {
-            // A channel the broker closed because of an error (publishing
-            // to an exchange that doesn't exist, for example) stays closed
-            // for good -- automatic recovery only covers a lost connection
-            // -- so a closed one is replaced rather than reused.
+            // A channel the broker closed after an error stays closed
+            // (recovery only covers lost connections), so replace it.
             if (_channel is { IsOpen: true })
                 return _channel;
 

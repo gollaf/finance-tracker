@@ -29,7 +29,7 @@ namespace FinanceTracker.Application.Transactions
         /// at the moment of writing, as one atomic database operation, and
         /// returns whether it did. Unlike load-modify-UpdateAsync, a Category
         /// someone else assigned in the meantime (the user, manually) can
-        /// never be overwritten. See docs/adr/0014-ai-transaction-categorization.md.
+        /// never be overwritten.
         /// </summary>
         Task<bool> TrySetCategoryIfUncategorizedAsync(
             TransactionId transactionId, CategoryId categoryId, CancellationToken cancellationToken = default);

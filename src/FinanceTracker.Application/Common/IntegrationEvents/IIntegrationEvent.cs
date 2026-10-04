@@ -8,13 +8,9 @@ namespace FinanceTracker.Application.Common.IntegrationEvents
     /// the few values a consumer needs, never a whole entity.
     /// </summary>
     /// <remarks>
-    /// EventName is a <c>static abstract</c> member (C# 11): every event type
-    /// must declare its own name, and IOutbox.Enqueue reads it straight from
-    /// the type parameter (<c>TEvent.EventName</c>) with no instance
-    /// property to serialize and no reflection. One consequence of static
-    /// abstract members: IIntegrationEvent itself can't be used as a type
-    /// argument (<c>List&lt;IIntegrationEvent&gt;</c> is a compile error,
-    /// CS8920) -- always use the concrete event type.
+    /// EventName is static abstract, so IOutbox.Enqueue reads it from the
+    /// type parameter without reflection. The catch: IIntegrationEvent itself
+    /// can't be a type argument (CS8920) -- always use the concrete type.
     /// </remarks>
     public interface IIntegrationEvent
     {

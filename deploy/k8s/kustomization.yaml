@@ -1,44 +1,25 @@
-# Entry point for `kubectl apply -k deploy/k8s`: kubectl runs Kustomize over
-# this folder, which reads the files listed below, applies the transformations
-# declared here, and sends the combined result to the cluster in one go.
-# Every file listed is plain Kubernetes YAML -- Kustomize has no templating
-# language; it only makes small, predictable edits to complete objects.
+# Entry point for `kubectl apply -k deploy/k8s`.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# Puts every object below into this namespace, so none of the resource files
-# has to repeat `namespace:` (and none can forget it).
 namespace: finance-tracker
 
 resources:
   - namespace.yaml
   - postgres.yaml
   - rabbitmq.yaml
-  # migrate-job.yaml runs once and stops; api.yaml's Pods only become ready
-  # once it has (their readiness check includes "all migrations applied").
   - migrate-job.yaml
   - api.yaml
   - worker.yaml
 
-# RabbitMQ's extra configuration file, as a ConfigMap. Same hash-suffix
-# behavior as the Secret below: editing rabbitmq-memory.conf produces a new
-# ConfigMap name, which rolls the RabbitMQ Pod so it reads the new file.
+# Hash-suffixed like the Secret below, so editing the file rolls the Pod.
 configMapGenerator:
   - name: rabbitmq-config
     files:
-      # <key>=<file>: the key becomes the file name inside the Pod.
       - 30-memory.conf=rabbitmq-memory.conf
 
-# Builds the Secret from a local, gitignored file instead of a committed
-# manifest -- see secrets.env.example for the format and how to create it.
-#
-# Kustomize appends a hash of the content to the generated name
-# (finance-tracker-secrets-<hash>) and rewrites every reference to
-# "finance-tracker-secrets" in the resources above to match. Changing a value
-# therefore produces a *new* Secret name, which changes the Pod template of
-# everything using it, which makes Kubernetes roll those Pods -- so they pick
-# up the new value without a manual restart. Without the hash, Pods would keep
-# the old value until someone remembered to restart them.
+# Built from the gitignored secrets.env (see secrets.env.example). The name
+# gets a content hash, so changing a value rolls the Pods that use it.
 secretGenerator:
   - name: finance-tracker-secrets
     envs:

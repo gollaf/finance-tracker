@@ -23,10 +23,6 @@ namespace FinanceTracker.Infrastructure.Persistence.Repositories
                 .Where(t => t.AccountId == accountId)
                 .ToListAsync(cancellationToken);
 
-        // Unfiltered by Account on purpose, matching the interface's own
-        // comment: a Budget targets a Category, not an Account, so this has
-        // to find every Transaction against that Category across every
-        // Account.
         public async Task<IReadOnlyList<Transaction>> GetByCategoryIdAsync(
             CategoryId categoryId, CancellationToken cancellationToken = default) =>
             await _context.Transactions
@@ -45,18 +41,9 @@ namespace FinanceTracker.Infrastructure.Persistence.Repositories
             await _context.SaveChangesAsync(cancellationToken);
         }
 
-        // ExecuteUpdateAsync sends one UPDATE ... WHERE straight to the
-        // database -- no loading, no change tracking, no SaveChangesAsync:
-        //   UPDATE "Transactions" SET "CategoryId" = @categoryId
-        //   WHERE "Id" = @transactionId AND "CategoryId" IS NULL
-        // The "still uncategorized?" check and the write happen in the same
-        // statement, so nothing can change the row in between. Zero rows
-        // affected means it was already categorized (or no longer exists).
-        //
-        // Because it bypasses the change tracker, a Transaction instance
-        // this DbContext already has loaded is NOT updated in memory -- load
-        // it again (from a new DbContext, or with AsNoTracking) to see the
-        // new value.
+        // One UPDATE ... WHERE "CategoryId" IS NULL, so the check and the
+        // write are atomic. It bypasses the change tracker: an instance this
+        // DbContext already loaded still shows the old value.
         public async Task<bool> TrySetCategoryIfUncategorizedAsync(
             TransactionId transactionId, CategoryId categoryId, CancellationToken cancellationToken = default)
         {

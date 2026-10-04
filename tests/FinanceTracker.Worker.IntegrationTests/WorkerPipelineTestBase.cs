@@ -63,8 +63,7 @@ namespace FinanceTracker.Worker.IntegrationTests
 
             _host = BuildWorkerHost(WorkerSettings);
 
-            // In the running system the Api applies migrations (ADR 0008 and
-            // ADR 0017); there's no Api here, so the test does it.
+            // Normally the Api migrates; there's no Api here.
             await using (var scope = _host.Services.CreateAsyncScope())
             {
                 await scope.ServiceProvider.GetRequiredService<FinanceTrackerDbContext>().Database.MigrateAsync();

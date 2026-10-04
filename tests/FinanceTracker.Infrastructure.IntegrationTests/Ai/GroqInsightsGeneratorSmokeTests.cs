@@ -10,24 +10,11 @@ using Microsoft.Extensions.Options;
 namespace FinanceTracker.Infrastructure.IntegrationTests.Ai
 {
     /// <summary>
-    /// Calls the real Groq API over the real network -- deliberately not
-    /// covered by GroqInsightsGeneratorTests, which fakes HttpClient's
-    /// transport (see that class's own doc comment for why). This is the
-    /// one place in the whole test suite that can catch a real
-    /// integration bug against Groq's actual API -- a wire-format mismatch,
-    /// a changed response shape, an auth header Groq actually rejects --
-    /// none of which a fake handler could ever reveal, because a fake
-    /// handler only ever proves this code handles the responses *I*
-    /// assumed Groq would send.
+    /// Calls the real Groq API -- the only test that can catch a mismatch
+    /// with Groq's actual wire format, which a fake handler can't reveal.
     ///
-    /// Silent in CI (no GROQ_API_KEY there, by design -- see
-    /// RequiresGroqApiKeyAttribute and
-    /// docs/adr/0010-ai-insights-provider-and-integration-design.md).
-    /// Costs a small amount of real free-tier quota and takes a real
-    /// network round-trip, so it's opt-in rather than part of the normal
-    /// `dotnet test` run everyone does on every change -- run it
-    /// deliberately after touching GroqInsightsGenerator or its prompt, or
-    /// periodically to confirm Groq hasn't changed anything underneath it:
+    /// Skipped unless GROQ_API_KEY is set (it isn't in CI). Run it after
+    /// changing GroqInsightsGenerator or its prompt:
     ///
     ///   GROQ_API_KEY=gsk_... dotnet test --filter GroqInsightsGeneratorSmokeTests
     /// </summary>
@@ -60,10 +47,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Ai
 
             var result = await generator.GenerateAsync(request, CancellationToken.None);
 
-            // Deliberately not asserting on the exact wording -- it's real,
-            // non-deterministic AI output. The point of this test is that
-            // Groq accepted the request and returned something usable, not
-            // what specifically it said.
+            // Not asserting on the wording: real AI output isn't deterministic.
             result.IsSuccess.Should().BeTrue(
                 $"the real Groq API call should succeed, but failed with: {result.Error.Code} {result.Error.Message}");
             result.Value.Should().NotBeNullOrWhiteSpace();

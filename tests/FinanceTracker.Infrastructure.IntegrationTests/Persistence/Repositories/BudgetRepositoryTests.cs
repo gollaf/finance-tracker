@@ -38,10 +38,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
             await _postgres.DisposeAsync();
         }
 
-        // Budget.CategoryId now has a real foreign key onto Categories (ADR
-        // 0005), so every test that persists a budget needs a Category row
-        // that actually exists first — CategoryId.New() alone is no longer
-        // enough, the database will reject it.
+        // Budget.CategoryId is a foreign key, so the Category must exist.
         private async Task<CategoryId> CreatePersistedCategoryAsync(string name = "Food")
         {
             var category = Category.Create(name);

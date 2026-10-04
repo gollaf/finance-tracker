@@ -4,11 +4,9 @@ using Microsoft.AspNetCore.Mvc;
 namespace FinanceTracker.Api.Common
 {
     /// <summary>
-    /// The one place a failed Result becomes an HTTP response, per ADR
-    /// 0004's fixed ErrorType-to-status table. Only the failure path is
-    /// generic here on purpose -- success shape (201 vs 200 vs 204, what
-    /// goes in the body, any Location header) is decided per action, since
-    /// it genuinely differs per use case in a way failures don't.
+    /// The one place a failed Result becomes an HTTP response (ADR 0004).
+    /// Only failures are mapped here; each action shapes its own success
+    /// response.
     /// </summary>
     public static class ResultExtensions
     {
@@ -25,9 +23,7 @@ namespace FinanceTracker.Api.Common
                 ErrorType.Validation => Problem(result.Error, StatusCodes.Status400BadRequest),
                 ErrorType.NotFound => Problem(result.Error, StatusCodes.Status404NotFound),
                 ErrorType.Conflict => Problem(result.Error, StatusCodes.Status409Conflict),
-                // ErrorType.Failure, and anything unrecognized, both fall
-                // back to 500 with a generic detail -- per ADR 0004, a
-                // Failure's own Error.Message is not shown to the client.
+                // Failure and anything unknown: 500, without the internal message.
                 _ => Problem(result.Error, StatusCodes.Status500InternalServerError, genericDetail: true),
             };
         }

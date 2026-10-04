@@ -7,11 +7,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace FinanceTracker.Api.IntegrationTests.Categories
 {
     /// <summary>
-    /// Names are suffixed with a fresh Guid in every test. The class-shared
-    /// fixture means every test in this class hits the same database (see
-    /// CustomWebApplicationFactory), and CreateCategory enforces real
-    /// name uniqueness -- two tests both trying to create plain "Groceries"
-    /// would collide and turn an intended 201 into an unintended 409.
+    /// Names get a Guid suffix: every test in this class shares one database,
+    /// and category names must be unique.
     /// </summary>
     public sealed class CategoriesControllerTests : IClassFixture<CustomWebApplicationFactory>
     {

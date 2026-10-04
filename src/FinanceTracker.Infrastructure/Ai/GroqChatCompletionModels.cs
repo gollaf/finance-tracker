@@ -3,11 +3,9 @@ using System.Text.Json.Serialization;
 namespace FinanceTracker.Infrastructure.Ai
 {
     /// <summary>
-    /// The request/response wire shapes for Groq's OpenAI-compatible
-    /// /openai/v1/chat/completions endpoint -- internal, since nothing
-    /// outside GroqInsightsGenerator should ever see Groq's own JSON shape.
-    /// Grouped in one file because none of these four types has any reason
-    /// to exist independently of this one endpoint's contract.
+    /// Request/response JSON shapes for Groq's OpenAI-compatible chat
+    /// completions endpoint. Internal: nothing outside the Groq clients
+    /// should depend on Groq's wire format.
     /// </summary>
     internal sealed record GroqChatCompletionRequest(
         [property: JsonPropertyName("model")] string Model,

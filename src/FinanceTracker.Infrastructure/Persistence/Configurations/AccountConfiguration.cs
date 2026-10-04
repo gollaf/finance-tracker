@@ -7,13 +7,9 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 namespace FinanceTracker.Infrastructure.Persistence.Configurations
 {
     /// <summary>
-    /// Maps Account to its "Accounts" table. Two things here are new
-    /// compared to CategoryConfiguration: Type is stored as text, not an
-    /// integer (per ADR 0003 — readable in psql, immune to the enum's
-    /// member order ever changing), and Name's max length is read off
-    /// Account.MaxNameLength itself rather than a repeated magic number, so
-    /// the column constraint can never quietly drift from the Domain
-    /// invariant it's meant to mirror.
+    /// Maps Account to its "Accounts" table. Type is stored as text (see
+    /// ADR 0003), and Name's max length comes from Account.MaxNameLength so
+    /// the column can't drift from the Domain rule.
     /// </summary>
     public sealed class AccountConfiguration : IEntityTypeConfiguration<Account>
     {

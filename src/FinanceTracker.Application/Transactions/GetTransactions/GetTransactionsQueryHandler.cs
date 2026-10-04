@@ -5,10 +5,8 @@ using MediatR;
 namespace FinanceTracker.Application.Transactions.GetTransactions
 {
     /// <summary>
-    /// Filtering happens in memory over GetByAccountIdAsync's full result —
-    /// fine at this scale with no database yet. Pushing the date range down
-    /// into a real query (a SQL WHERE clause) is an Infrastructure concern
-    /// for whenever EF Core lands.
+    /// Filters in memory over all of the Account's Transactions. If the data
+    /// grows, the date range belongs in the repository query instead.
     /// </summary>
     public sealed class GetTransactionsQueryHandler
         : IRequestHandler<GetTransactionsQuery, Result<IReadOnlyList<TransactionSummaryDto>>>

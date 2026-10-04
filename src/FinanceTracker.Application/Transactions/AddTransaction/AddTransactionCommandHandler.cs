@@ -43,9 +43,8 @@ namespace FinanceTracker.Application.Transactions.AddTransaction
             var transaction = Transaction.Create(
                 request.AccountId, amount, request.Type, request.Description, request.OccurredOn);
 
-            // Enqueue BEFORE AddAsync: AddAsync's SaveChangesAsync is what
-            // writes the outbox row too, in the same database transaction
-            // (see IOutbox and docs/adr/0013-transactional-outbox.md).
+            // Enqueue BEFORE AddAsync: AddAsync's save writes the outbox row
+            // in the same database transaction (see IOutbox).
             _outbox.Enqueue(new TransactionAdded(transaction.Id.Value));
             await _transactionRepository.AddAsync(transaction, cancellationToken);
 

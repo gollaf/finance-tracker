@@ -12,14 +12,9 @@ metadata:
   labels:
     app: outbox-relay
 spec:
-  # One relay. Two would read the same unpublished outbox rows and publish
-  # them twice (ADR 0013) -- harmless, since consumers are idempotent, but
-  # wasteful. Don't scale this one.
+  # Exactly one: two relays would publish every row twice. Don't scale.
   replicas: 1
-  # Recreate: on an update, stop the old Pod completely BEFORE starting the
-  # new one. The default (RollingUpdate) starts the new one first, which
-  # would briefly run two relays. A few seconds without a relay only delays
-  # publishing -- rows wait safely in the outbox table.
+  # Recreate, not RollingUpdate, so two relays never run at once.
   strategy:
     type: Recreate
   selector:
@@ -30,20 +25,16 @@ spec:
       labels:
         app: outbox-relay
     spec:
-      # Longer than the .NET host's own 30-second shutdown timeout, so the
-      # host finishes stopping by itself before Kubernetes force-kills it.
+      # Longer than the .NET host's 30s shutdown timeout.
       terminationGracePeriodSeconds: 45
       containers:
         - name: outbox-relay
           image: finance-tracker-worker:dev
-          # The image only exists inside Minikube -- see migrate-job.yaml.
           imagePullPolicy: IfNotPresent
           env:
-            # A non-web .NET host reads DOTNET_ENVIRONMENT, not
-            # ASPNETCORE_ENVIRONMENT (same as docker-compose.yml).
             - name: DOTNET_ENVIRONMENT
               value: Development
-            # This Pod's role: the relay only.
+            # Relay only.
             - name: Worker__RunConsumers
               value: "false"
             - name: POSTGRES_PASSWORD
@@ -51,11 +42,8 @@ spec:
                 secretKeyRef:
                   name: finance-tracker-secrets
                   key: POSTGRES_PASSWORD
-            # Composed by Kubernetes, as in api.yaml.
             - name: ConnectionStrings__FinanceTracker
               value: Host=postgres;Port=5432;Database=financetracker;Username=postgres;Password=$(POSTGRES_PASSWORD)
-            # "rabbitmq" is the headless Service from rabbitmq.yaml. The
-            # user name matches RABBITMQ_DEFAULT_USER there.
             - name: RabbitMq__Host
               value: rabbitmq
             - name: RabbitMq__UserName
@@ -80,9 +68,8 @@ metadata:
   labels:
     app: worker
 spec:
-  # Start with two; `kubectl scale deployment worker --replicas=N` for more.
-  # RabbitMQ hands each message to exactly one consumer, so N workers share
-  # the queues' work instead of repeating it.
+  # Scale with `kubectl scale deployment worker --replicas=N`; workers share
+  # the queues' messages.
   replicas: 2
   selector:
     matchLabels:
@@ -92,9 +79,7 @@ spec:
       labels:
         app: worker
     spec:
-      # See outbox-relay above. Here it also matters for messages in flight:
-      # on SIGTERM the consumers stop, and a message that was mid-handling is
-      # nacked back to its queue (ADR 0012) for another worker to pick up.
+      # Lets in-flight messages be nacked back to their queue on shutdown.
       terminationGracePeriodSeconds: 45
       containers:
         - name: worker
@@ -103,7 +88,7 @@ spec:
           env:
             - name: DOTNET_ENVIRONMENT
               value: Development
-            # This Pod's role: the consumers only.
+            # Consumers only.
             - name: Worker__RunOutboxRelay
               value: "false"
             - name: POSTGRES_PASSWORD
@@ -122,17 +107,14 @@ spec:
                 secretKeyRef:
                   name: finance-tracker-secrets
                   key: RABBITMQ_PASSWORD
-            # The consumers categorize transactions with Groq. Optional, as
-            # in api.yaml: without a key, transactions are simply left
-            # uncategorized (ADR 0014).
+            # Optional: without it, transactions stay uncategorized.
             - name: Groq__ApiKey
               valueFrom:
                 secretKeyRef:
                   name: finance-tracker-secrets
                   key: GROQ_API_KEY
                   optional: true
-          # A CSV import runs in one database transaction inside one worker,
-          # so memory use grows with the file -- more headroom than the relay.
+          # A CSV import's memory use grows with the file.
           resources:
             requests:
               cpu: 100m

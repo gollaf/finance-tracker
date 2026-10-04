@@ -12,9 +12,8 @@ using Microsoft.Extensions.Options;
 namespace FinanceTracker.Infrastructure.IntegrationTests.Ai
 {
     /// <summary>
-    /// No real network call: Groq's side is played by FakeHttpMessageHandler,
-    /// same approach as GroqInsightsGeneratorTests. The real-API check is
-    /// GroqCategorySuggesterSmokeTests.
+    /// No real network call: Groq is played by FakeHttpMessageHandler. The
+    /// real-API check is GroqCategorySuggesterSmokeTests.
     /// </summary>
     public sealed class GroqCategorySuggesterTests
     {

@@ -41,8 +41,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
             await _postgres.DisposeAsync();
         }
 
-        // Both AccountId and CategoryId now have real foreign keys (ADR
-        // 0005), so every test needs real, persisted rows to point at.
+        // AccountId and CategoryId are foreign keys, so the rows must exist.
         private async Task<AccountId> CreatePersistedAccountAsync(string name = "Checking")
         {
             var account = Account.Create(name, AccountType.Checking, "USD");

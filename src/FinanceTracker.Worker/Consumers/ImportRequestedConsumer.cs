@@ -8,17 +8,12 @@ namespace FinanceTracker.Worker.Consumers
 {
     /// <summary>
     /// Processes an import job when its ImportRequested event arrives, by
-    /// sending ProcessImportJobCommand. Same thin-adapter shape as
-    /// TransactionAddedCategorizationConsumer (see
-    /// docs/adr/0015-integration-event-contracts.md).
+    /// sending ProcessImportJobCommand.
     /// </summary>
     /// <remarks>
-    /// Redelivery is safe without anything extra here: the command runs the
-    /// whole import in one database transaction and skips a job that is no
-    /// longer Pending (docs/adr/0016-asynchronous-csv-import.md). An
-    /// exception from it -- the database going away mid-import, say -- has
-    /// already rolled everything back by the time it reaches this class, so
-    /// letting it propagate (and the message be retried) is correct.
+    /// Redelivery is safe: the command runs in one database transaction and
+    /// skips a job that is no longer Pending. An exception has already
+    /// rolled everything back, so letting it propagate (and retry) is correct.
     /// </remarks>
     public sealed class ImportRequestedConsumer : RabbitMqConsumer<ImportRequested>
     {
@@ -30,10 +25,6 @@ namespace FinanceTracker.Worker.Consumers
         {
         }
 
-        /// <summary>
-        /// Registered by AddWorker as well, for the same reason as
-        /// TransactionAddedCategorizationConsumer.Queue.
-        /// </summary>
         public static readonly ConsumerQueue Queue =
             new("finance-tracker.process-import", ImportRequested.EventName);
 
@@ -51,9 +42,8 @@ namespace FinanceTracker.Worker.Consumers
             var result = await sender.Send(
                 new ProcessImportJobCommand(new ImportJobId(message.ImportJobId)), cancellationToken);
 
-            // As with categorization: every expected situation is a
-            // successful outcome, so a failure can only be a malformed
-            // message (an empty id) -- dead-letter it where it's visible.
+            // Expected situations are successful outcomes, so a failure means
+            // a malformed message: throw so it ends up in the dead-letter queue.
             if (result.IsFailure)
             {
                 throw new InvalidOperationException(

@@ -12,8 +12,7 @@ namespace FinanceTracker.Application.Transactions.GetSpendingInsights
     /// <summary>
     /// Computes this-month-vs-prior-3-month-average spending per Category,
     /// then asks IInsightsGenerator to describe it in plain language. Every
-    /// number in the result comes from this handler, never from the AI --
-    /// see docs/adr/0010-ai-insights-provider-and-integration-design.md. An
+    /// number in the result comes from this handler, never from the AI. An
     /// IInsightsGenerator failure degrades Narrative to a templated fallback
     /// built from the same Trends; it never fails the query.
     /// </summary>
@@ -51,23 +50,16 @@ namespace FinanceTracker.Application.Transactions.GetSpendingInsights
             var period = BudgetPeriod.Create(request.Year, request.Month);
             var currency = account.Currency;
 
-            // BudgetPeriod only knows "does this date fall in this one
-            // calendar month" (Contains) -- the prior-3-months window below
-            // spans three, so it's built directly from DateOnly boundaries
-            // instead of three separate BudgetPeriod.Contains checks.
+            // The prior window spans three months, which BudgetPeriod can't
+            // express, so both windows use plain DateOnly boundaries.
             var currentMonthStart = new DateOnly(request.Year, request.Month, 1);
             var currentMonthEndExclusive = currentMonthStart.AddMonths(1);
             var priorWindowStart = currentMonthStart.AddMonths(-3);
 
             var transactions = await _transactionRepository.GetByAccountIdAsync(request.AccountId, cancellationToken);
 
-            // Grouped into a list of (CategoryId?, Money) pairs, not a
-            // Dictionary<CategoryId?, Money> -- Dictionary rejects a null
-            // key even when TKey is a nullable value type like CategoryId?
-            // (its null-check runs before any comparer is consulted), and
-            // an uncategorized Transaction's CategoryId is exactly that
-            // null key. Category counts here are always small, so a linear
-            // FirstOrDefault lookup below costs nothing that matters.
+            // A list of pairs, not a Dictionary: uncategorized spending has a
+            // null CategoryId, and Dictionary rejects null keys.
             var currentMonthByCategory = transactions
                 .Where(t => t.Type == TransactionType.Expense)
                 .Where(t => t.OccurredOn >= currentMonthStart && t.OccurredOn < currentMonthEndExclusive)
@@ -75,8 +67,7 @@ namespace FinanceTracker.Application.Transactions.GetSpendingInsights
                 .Select(g => (CategoryId: g.Key, Total: g.Aggregate(Money.Zero(currency), (total, t) => total + t.Amount)))
                 .ToList();
 
-            // Summed across all three prior months, then divided by 3 below
-            // -- a "3-month average," not a 3-month total.
+            // Summed over three months, then divided by 3 below for an average.
             var priorWindowByCategory = transactions
                 .Where(t => t.Type == TransactionType.Expense)
                 .Where(t => t.OccurredOn >= priorWindowStart && t.OccurredOn < currentMonthStart)
@@ -113,8 +104,7 @@ namespace FinanceTracker.Application.Transactions.GetSpendingInsights
 
             if (trends.Count == 0)
             {
-                // Nothing to summarize -- skip the AI call entirely rather
-                // than sending an empty prompt (see ADR 0010, Consequences).
+                // Nothing to summarize, so don't call the AI with an empty prompt.
                 narrative = $"No expense activity found for {FormatPeriod(period)} or the three months " +
                     "before it, so there isn't enough history yet to generate spending insights.";
                 narrativeGeneratedByAi = false;
@@ -158,9 +148,8 @@ namespace FinanceTracker.Application.Transactions.GetSpendingInsights
 
             var category = await _categoryRepository.GetByIdAsync(categoryId.Value, cancellationToken);
 
-            // Defensive, not expected in practice: ADR 0005's Restrict
-            // foreign key means a Category referenced by a Transaction can't
-            // actually be deleted.
+            // Defensive only: a Restrict foreign key stops a Category that a
+            // Transaction references from being deleted.
             return category?.Name ?? "Unknown Category";
         }
 

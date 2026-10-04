@@ -3,13 +3,10 @@ using RabbitMQ.Client;
 namespace FinanceTracker.Infrastructure.Messaging
 {
     /// <summary>
-    /// Every exchange and queue this application uses, declared from code
-    /// rather than clicked together in the management UI -- so a fresh broker
-    /// (a new laptop, a Testcontainers instance, a Kubernetes pod) ends up
-    /// with exactly the same topology with no manual steps. Every declare
-    /// here is idempotent: declaring something that already exists with the
-    /// same settings is a no-op, so it's safe for every process to run these
-    /// on every startup. See docs/adr/0012-rabbitmq-topology-and-delivery-guarantees.md.
+    /// Every exchange and queue this application uses, declared from code so
+    /// a fresh broker needs no manual setup. The declares are idempotent, so
+    /// every process runs them on every startup.
+    /// See docs/adr/0012-rabbitmq-topology-and-delivery-guarantees.md.
     /// </summary>
     public static class RabbitMqTopology
     {
@@ -39,9 +36,6 @@ namespace FinanceTracker.Infrastructure.Messaging
 
         public static async Task DeclareExchangesAsync(IChannel channel, CancellationToken cancellationToken = default)
         {
-            // durable: true -- the exchange definition survives a broker
-            // restart. autoDelete: false -- it isn't removed just because
-            // no queue happens to be bound to it at the moment.
             await channel.ExchangeDeclareAsync(
                 exchange: EventsExchange,
                 type: ExchangeType.Topic,
@@ -110,10 +104,7 @@ namespace FinanceTracker.Infrastructure.Messaging
                 autoDelete: false,
                 arguments: new Dictionary<string, object?>
                 {
-                    // Quorum queues are RabbitMQ's recommended durable queue
-                    // type, and the only one that counts failed deliveries
-                    // and enforces a limit on them -- the poison-message
-                    // protection described on DefaultDeliveryLimit.
+                    // Quorum queues are the type that enforces x-delivery-limit.
                     ["x-queue-type"] = "quorum",
                     ["x-delivery-limit"] = deliveryLimit,
                     ["x-dead-letter-exchange"] = DeadLetterExchange,

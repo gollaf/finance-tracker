@@ -11,12 +11,8 @@ using FluentAssertions;
 namespace FinanceTracker.Api.IntegrationTests.EndToEnd
 {
     /// <summary>
-    /// The second full-stack flow, alongside AccountLifecycleTests: a
-    /// Budget's status and an Account's spending summary are computed by two
-    /// separate query handlers (GetBudgetStatus, GetSpendingSummary) that
-    /// both independently sum the same underlying Transactions. This proves
-    /// they agree with each other and with reality end to end, not just that
-    /// each one individually returns a plausible-looking number.
+    /// GetBudgetStatus and GetSpendingSummary each sum the same Transactions
+    /// independently; this proves end to end that they agree.
     /// </summary>
     public sealed class BudgetOverspendTests : IClassFixture<CustomWebApplicationFactory>
     {

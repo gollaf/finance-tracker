@@ -5,7 +5,6 @@ namespace FinanceTracker.Domain.Imports
     /// <summary>
     /// A CSV import that was accepted but runs later, in the background:
     /// the rows to import, and -- once processed -- what happened to them.
-    /// Its own aggregate, referencing its Account by id only (ADR 0005).
     /// See docs/adr/0016-asynchronous-csv-import.md.
     /// </summary>
     /// <remarks>
@@ -45,9 +44,6 @@ namespace FinanceTracker.Domain.Imports
 
         public bool IsPending => Status == ImportJobStatus.Pending;
 
-        // Used by Create below and, through constructor binding, by EF Core
-        // when loading a job. Everything else is set through the private
-        // setters.
         private ImportJob(ImportJobId id, AccountId accountId, DateTimeOffset createdAt)
         {
             Id = id;

@@ -22,18 +22,14 @@ namespace FinanceTracker.Infrastructure.Persistence
         {
             ArgumentNullException.ThrowIfNull(operation);
 
-            // Already inside a transaction (an atomic operation calling
-            // another one): just take part in the outer one, which decides
-            // whether everything commits. Starting a second transaction on
-            // the same connection is an error.
+            // Already inside a transaction: join it rather than start a
+            // second one, which would fail.
             if (_dbContext.Database.CurrentTransaction is not null)
                 return await operation(cancellationToken);
 
             await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-            // If operation throws, CommitAsync is never reached, and
-            // disposing a transaction that was never committed rolls it
-            // back -- that is the whole rollback path.
+            // If operation throws, disposing the uncommitted transaction rolls it back.
             var result = await operation(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
 

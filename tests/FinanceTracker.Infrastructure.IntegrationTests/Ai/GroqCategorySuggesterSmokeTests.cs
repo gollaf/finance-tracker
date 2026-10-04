@@ -9,8 +9,7 @@ using Microsoft.Extensions.Options;
 namespace FinanceTracker.Infrastructure.IntegrationTests.Ai
 {
     /// <summary>
-    /// Calls the real Groq API -- skipped unless GROQ_API_KEY is set, exactly
-    /// like GroqInsightsGeneratorSmokeTests (see that class for why). Run it
+    /// Calls the real Groq API; skipped unless GROQ_API_KEY is set. Run it
     /// after changing GroqCategorySuggester's prompt, model, or parsing:
     ///
     ///   $env:GROQ_API_KEY="gsk_..."; dotnet test --filter GroqCategorySuggesterSmokeTests

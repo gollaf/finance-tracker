@@ -8,8 +8,8 @@ namespace FinanceTracker.Application.Budgets.CreateBudget
 {
     /// <summary>
     /// Enforces the one-budget-per-category-per-period rule that Budget
-    /// itself can't (see the remarks on Budget) — a second Create for the
-    /// same Category and BudgetPeriod is a Conflict, not a duplicate row.
+    /// itself can't -- a second Create for the same Category and
+    /// BudgetPeriod is a Conflict, not a duplicate row.
     /// </summary>
     public sealed class CreateBudgetCommandHandler : IRequestHandler<CreateBudgetCommand, Result<BudgetId>>
     {

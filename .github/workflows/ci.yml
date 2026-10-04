@@ -5,42 +5,31 @@ on:
     branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
-  # Adds a "Run workflow" button on the Actions tab, for re-running CI by hand
-  # without pushing a commit.
+  # Manual "Run workflow" button.
   workflow_dispatch:
 
-# The default rights of the automatic GITHUB_TOKEN for every job in this file:
-# read the repository, nothing else. A job that needs more declares its own
-# `permissions:` block -- which then *replaces* this one for that job rather
-# than adding to it, so it has to repeat `contents: read`.
+# Read-only by default. A job-level `permissions:` block replaces this one
+# rather than adding to it, so it must repeat `contents: read`.
 permissions:
   contents: read
 
-# At most one run per workflow and branch at a time. On a pull request a new
-# push makes the older run pointless, so it is cancelled. On master a run that
-# has started is never cancelled -- it may be halfway through publishing
-# images. Master runs therefore go one after another, so the newest commit's
-# images are always the last ones pushed. (While one runs, only the newest
-# waiting run is kept; GitHub drops older waiting ones.)
+# One run per branch at a time. Pull request runs cancel older ones; master
+# runs are never cancelled mid-publish, so they queue instead.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  # Skips the .NET first-run banner and telemetry upload on every fresh runner.
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-    # The default is 6 hours. A hung test container start should fail in
-    # minutes, not keep a runner busy for the rest of the day.
     timeout-minutes: 20
     permissions:
       contents: read
-      # Lets the test report step publish its results as a check on the
-      # commit or pull request.
+      # For the test report check.
       checks: write
     steps:
       - uses: actions/checkout@v7
@@ -50,12 +39,8 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      # Restores ~/.nuget/packages from an earlier run, so `dotnet restore`
-      # only downloads what changed. The key is a hash of every .csproj: any
-      # added, removed or bumped package changes a .csproj, which changes the
-      # key. On a miss, restore-keys falls back to the newest cache of any
-      # earlier package set -- most packages are still the same -- and a new
-      # cache is saved under the new key once the job succeeds.
+      # Keyed on every .csproj: a package change makes a new key, and
+      # restore-keys falls back to the newest older cache.
       - name: Cache NuGet packages
         uses: actions/cache@v6
         with:
@@ -70,16 +55,13 @@ jobs:
       - name: Build
         run: dotnet build --no-restore
 
-      # One .trx file per test project in TestResults/. No LogFileName on
-      # purpose: a fixed file name is reused by every test project, each one
-      # overwriting the last, while the default name is unique per project.
+      # No LogFileName: a fixed name would make each test project overwrite
+      # the previous one's .trx file.
       - name: Test
         id: test
         run: dotnet test --no-build --verbosity normal --logger trx --results-directory TestResults
 
-      # Runs after failing tests too -- that is when the report matters most.
-      # Skipped when the Test step never ran (a failed build), since there
-      # would be no results to report.
+      # Also after failing tests; skipped only when the tests never ran.
       - name: Test report
         if: ${{ !cancelled() && steps.test.outcome != 'skipped' }}
         uses: dorny/test-reporter@v3
@@ -89,30 +71,20 @@ jobs:
           reporter: dotnet-trx
           list-tests: failed
 
-  # Builds the Api and Worker images exactly as `docker build` does on a
-  # laptop. A Dockerfile can break without any test noticing -- a new project
-  # the build stage doesn't COPY, a renamed .csproj -- and this job is what
-  # catches it. On master the images are also published to GitHub Container
-  # Registry (ghcr.io); pull request runs only build them.
+  # Builds both images on every run, catching Dockerfile breakage the tests
+  # can't see. Only master runs push them to ghcr.io (ADR 0022).
   docker-image:
     name: docker-image (${{ matrix.image }})
-    # Images are only built from code that passed its tests -- and so only
-    # tested code is ever published.
     needs: build-and-test
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
-      # Pushing to ghcr.io with the automatic GITHUB_TOKEN.
       packages: write
     env:
-      # 'true' only for a run on master itself: a push there, or a manual run
-      # started on master. A pull request run's ref is refs/pull/<n>/merge,
-      # and a manual run on another branch has that branch's ref.
+      # 'true' only for runs on master (a pull request's ref is refs/pull/<n>/merge).
       PUBLISH: ${{ github.ref == 'refs/heads/master' }}
     strategy:
-      # Builds both images even when one fails, so a single run shows every
-      # broken Dockerfile instead of only the first.
       fail-fast: false
       matrix:
         include:
@@ -121,20 +93,14 @@ jobs:
           - image: worker
             dockerfile: src/FinanceTracker.Worker/Dockerfile
     steps:
-      # The build context is this checked-out folder, the same "." as on a
-      # laptop, so .dockerignore applies exactly as it does there.
       - uses: actions/checkout@v7
 
-      # A BuildKit builder in its own container. The runner's default builder
-      # (the plain "docker" driver) only supports the GitHub Actions cache
-      # backend with Docker's containerd image store, which isn't enabled there.
+      # The default "docker" driver can't use the GitHub Actions cache here.
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      # Works out the image's full name and tags, and the OCI labels that
-      # describe it. sha-<7 chars> names exactly one commit, forever; latest
-      # moves to the newest master build. org.opencontainers.image.source in
-      # the labels is what links the package on ghcr.io to this repository.
+      # sha-<7 chars> pins one commit; latest follows master. The
+      # org.opencontainers.image.source label links the package to this repo.
       - name: Image tags and labels
         id: meta
         uses: docker/metadata-action@v6
@@ -152,10 +118,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Layers are cached in the GitHub Actions cache, under one scope per
-      # image: with a shared scope each image's cache would overwrite the
-      # other's. mode=max also caches the layers of the build stage -- where
-      # the slow `dotnet restore` runs -- not only those of the final image.
+      # One cache scope per image, or they overwrite each other. mode=max
+      # also caches the build stage, where `dotnet restore` runs.
       - name: Build image
         uses: docker/build-push-action@v7
         with:
@@ -167,30 +131,22 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
 
-  # Checks that deploy/k8s still renders and that every object it renders is
-  # valid Kubernetes YAML -- a misspelled field, a value of the wrong type, an
-  # object whose apiVersion this Kubernetes version doesn't have. Nothing is
-  # applied anywhere: this job never talks to a cluster.
+  # Renders deploy/k8s and validates every object against the Kubernetes
+  # schemas. No cluster involved.
   k8s-manifests:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      # Pinned versions, each with the SHA-256 of its release archive from the
-      # project's published checksums file, so an archive that was swapped or
-      # corrupted is refused instead of run.
+      # Pinned, with the SHA-256 of each release archive.
       KUSTOMIZE_VERSION: v5.8.2
       KUSTOMIZE_SHA256: 06af0a202c2b831207d0173f9c9cdb1b30abceca0747cb3fbb72792d26055c95
       KUBECONFORM_VERSION: v0.8.0
       KUBECONFORM_SHA256: 9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883
-      # The Kubernetes version the manifests are checked against -- the one
-      # the local Minikube cluster runs (ADR 0019).
+      # The version the local Minikube cluster runs.
       KUBERNETES_VERSION: 1.37.0
     steps:
       - uses: actions/checkout@v7
 
-      # Both tools are single binaries from their GitHub releases. They go to
-      # a folder outside the checkout; GITHUB_PATH puts that folder on PATH
-      # for every later step of this job.
       - name: Install kustomize and kubeconform
         run: |
           mkdir -p "$RUNNER_TEMP/bin"
@@ -208,22 +164,15 @@ jobs:
 
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
-      # kustomization.yaml builds the Secret from deploy/k8s/secrets.env, which
-      # is gitignored and so never exists on a runner -- without it the render
-      # fails before validating anything. The committed example has the same
-      # keys with placeholder values, which is all a render needs. Real
-      # credentials never come near CI.
+      # The real secrets.env is gitignored, and the render fails without one.
+      # Placeholder values are enough to render.
       - name: Use the example secrets file
         run: cp deploy/k8s/secrets.env.example deploy/k8s/secrets.env
 
-      # The same combined YAML `kubectl apply -k deploy/k8s` would send to the
-      # cluster.
       - name: Render the manifests
         run: kustomize build deploy/k8s > "$RUNNER_TEMP/rendered.yaml"
 
-      # Validates every rendered object against the official schema of its
-      # kind for KUBERNETES_VERSION. -strict also rejects fields the schema
-      # doesn't define: without it, a misspelled field name is silently
-      # ignored -- by this check and by Kubernetes itself.
+      # -strict rejects unknown fields; otherwise a misspelled field is
+      # silently ignored, here and by Kubernetes.
       - name: Validate against the Kubernetes schemas
         run: kubeconform -strict -summary -kubernetes-version "$KUBERNETES_VERSION" "$RUNNER_TEMP/rendered.yaml"

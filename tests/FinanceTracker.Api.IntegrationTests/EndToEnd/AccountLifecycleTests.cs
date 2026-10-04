@@ -11,13 +11,9 @@ using FluentAssertions;
 namespace FinanceTracker.Api.IntegrationTests.EndToEnd
 {
     /// <summary>
-    /// Unlike every other test in this project, which exercises one
-    /// controller action at a time, this drives a full user-facing flow
-    /// through real HTTP and a real Postgres container in a single test --
-    /// the kind of gap where every endpoint passes its own tests but the
-    /// pieces still don't cohere (a wrong route, a currency mismatch, a
-    /// filter that silently drops the wrong rows) can slip through
-    /// per-endpoint tests entirely.
+    /// A full user flow through real HTTP and Postgres, to catch what
+    /// per-endpoint tests miss: a wrong route, a currency mismatch, a filter
+    /// that drops the wrong rows.
     /// </summary>
     public sealed class AccountLifecycleTests : IClassFixture<CustomWebApplicationFactory>
     {
@@ -28,10 +24,7 @@ namespace FinanceTracker.Api.IntegrationTests.EndToEnd
             _client = factory.CreateClient();
         }
 
-        // Same reasoning as TransactionsControllerTests.JsonOptions: reading
-        // TransactionResponse back requires knowing its Type enum was sent as
-        // a string, which ReadFromJsonAsync's own default options don't know
-        // about on their own.
+        // The server sends enums as strings (see TransactionsControllerTests).
         private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
         {
             Converters = { new JsonStringEnumConverter() },

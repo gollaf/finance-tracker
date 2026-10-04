@@ -15,9 +15,7 @@ namespace FinanceTracker.Infrastructure.Persistence.Conversions
     /// </summary>
     internal static class JsonListConversion
     {
-        // Enums as their names ("Expense"), not numbers, so the stored JSON
-        // stays readable and doesn't silently change meaning if an enum's
-        // members are ever reordered.
+        // Enums as names, so the JSON stays readable and survives reordering.
         private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
         {
             Converters = { new JsonStringEnumConverter() },
@@ -29,10 +27,7 @@ namespace FinanceTracker.Infrastructure.Persistence.Conversions
                 list => JsonSerializer.Serialize(list, Options),
                 json => JsonSerializer.Deserialize<List<T>>(json, Options) ?? new List<T>());
 
-            // Without a ValueComparer, EF Core compares a list property by
-            // reference only, so replacing the list with a new one works,
-            // but EF can't reliably tell whether the list changed. This
-            // compares by content, and snapshots a copy for that comparison.
+            // Compare by content, so EF Core can detect changes to the list.
             var comparer = new ValueComparer<IReadOnlyList<T>>(
                 (left, right) => left!.SequenceEqual(right!),
                 list => list.Aggregate(0, (hash, item) => HashCode.Combine(hash, item!.GetHashCode())),

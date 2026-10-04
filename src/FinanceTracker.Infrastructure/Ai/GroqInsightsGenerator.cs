@@ -42,11 +42,8 @@ namespace FinanceTracker.Infrastructure.Ai
         public async Task<Result<string>> GenerateAsync(
             InsightsGenerationRequest request, CancellationToken cancellationToken = default)
         {
-            // No API key configured -- a completely normal state until the
-            // developer sets one via User Secrets (see ADR 0010). Fail
-            // fast, before ever touching HttpClient, so this looks
-            // identical in behavior to Groq being unreachable: a
-            // Result.Failure the caller falls back from.
+            // No API key is a normal state: fail the same way as an
+            // unreachable Groq, so the caller falls back.
             if (string.IsNullOrWhiteSpace(_options.ApiKey))
             {
                 _logger.LogInformation(
@@ -97,12 +94,9 @@ namespace FinanceTracker.Infrastructure.Ai
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                // HttpClient.Timeout expiring surfaces as an
-                // OperationCanceledException even though the caller's own
-                // CancellationToken was never signaled -- the `when` clause
-                // tells the two apart. A genuinely cancelled request (the
-                // caller's own token fired) is allowed to propagate instead
-                // of being swallowed into a Result.
+                // HttpClient.Timeout also throws OperationCanceledException;
+                // the `when` clause separates it from a real cancellation by
+                // the caller, which is left to propagate.
                 _logger.LogWarning("Groq request timed out after {TimeoutSeconds}s.", _options.TimeoutSeconds);
                 return Result.Failure<string>(Error.Failure("Groq.Timeout", "The request to Groq timed out."));
             }

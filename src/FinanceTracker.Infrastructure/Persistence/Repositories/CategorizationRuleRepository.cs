@@ -13,10 +13,7 @@ namespace FinanceTracker.Infrastructure.Persistence.Repositories
             _context = context;
         }
 
-        // No ordering here on purpose — TransactionCategorizer.Categorize
-        // already sorts by Priority itself, so returning rules in whatever
-        // order Postgres gives them back would still produce correct
-        // results. Ordering here too would just be redundant work.
+        // Unordered: TransactionCategorizer sorts by Priority itself.
         public async Task<IReadOnlyList<CategorizationRule>> GetAllAsync(CancellationToken cancellationToken = default) =>
             await _context.CategorizationRules.ToListAsync(cancellationToken);
 

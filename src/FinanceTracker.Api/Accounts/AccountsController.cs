@@ -7,12 +7,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FinanceTracker.Api.Accounts
 {
-    /// <summary>
-    /// Each action is thin on purpose, per ADR 0004: build the MediatR
-    /// request from the incoming DTO, Send it, and either map a failure
-    /// through ResultExtensions.ToActionResult() or shape the success
-    /// response -- no business logic here.
-    /// </summary>
     [ApiController]
     [Route("api/accounts")]
     public sealed class AccountsController : ControllerBase
@@ -36,9 +30,7 @@ namespace FinanceTracker.Api.Accounts
             var accountId = result.Value.Value;
             var response = new CreateAccountResponse(accountId);
 
-            // No GetById action exists yet to point CreatedAtAction at, so
-            // the Location header is a plain, honest URL -- not a route
-            // name -- pointing at where the resource will be once one does.
+            // A plain URL: there is no GetById action for CreatedAtAction.
             return Created($"/api/accounts/{accountId}", response);
         }
 

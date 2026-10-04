@@ -9,14 +9,9 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 namespace FinanceTracker.Infrastructure.Persistence.Configurations
 {
     /// <summary>
-    /// Maps Transaction to its "Transactions" table. The last of the five
-    /// aggregates, and the one with two real cross-aggregate references:
-    /// AccountId (required) and CategoryId (optional). Both get real
-    /// foreign key constraints with no Domain navigation property, same
-    /// pattern as ADR 0005. Amount is a ComplexProperty, same pattern as
-    /// Budget.LimitAmount (ADR 0003 and its amendment) — Transaction's
-    /// constructor needed the same EF-Core-only secondary constructor
-    /// Budget's did, for the same reason.
+    /// Maps Transaction to its "Transactions" table. AccountId (required) and
+    /// CategoryId (optional) are foreign keys with no navigation properties
+    /// (ADR 0005); Amount is a complex property (ADR 0003).
     /// </summary>
     public sealed class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
     {
@@ -34,9 +29,7 @@ namespace FinanceTracker.Infrastructure.Persistence.Configurations
                 .HasConversion(new StronglyTypedIdValueConverter<AccountId>(id => id.Value, value => new AccountId(value)))
                 .IsRequired();
 
-            // Nullable: a Transaction can be uncategorized (see
-            // Transaction.Recategorize(null)). No IsRequired() call, unlike
-            // AccountId above.
+            // Nullable: a Transaction can be uncategorized.
             builder.Property(t => t.CategoryId)
                 .HasConversion(new StronglyTypedIdValueConverter<CategoryId>(id => id.Value, value => new CategoryId(value)));
 
@@ -68,18 +61,13 @@ namespace FinanceTracker.Infrastructure.Persistence.Configurations
             builder.Property(t => t.CreatedAt)
                 .IsRequired();
 
-            // Restrict rather than Cascade/SetNull: an Account still backing
-            // a Transaction must not be deletable by silently destroying
-            // that transaction's history.
+            // Restrict: deleting an Account must not destroy its history.
             builder.HasOne<Account>()
                 .WithMany()
                 .HasForeignKey(t => t.AccountId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Same reasoning for Category, even though the column is
-            // nullable — a Category still referenced by an existing
-            // Transaction must not be deletable by silently blanking that
-            // Transaction's CategoryId.
+            // Restrict too, rather than silently clearing CategoryId.
             builder.HasOne<Category>()
                 .WithMany()
                 .HasForeignKey(t => t.CategoryId)

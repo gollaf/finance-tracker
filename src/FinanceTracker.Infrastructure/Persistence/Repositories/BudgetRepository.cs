@@ -17,10 +17,8 @@ namespace FinanceTracker.Infrastructure.Persistence.Repositories
         public Task<Budget?> GetByIdAsync(BudgetId id, CancellationToken cancellationToken = default) =>
             _context.Budgets.SingleOrDefaultAsync(b => b.Id == id, cancellationToken);
 
-        // Compared field by field, not `b.Period == period` — EF Core's SQL
-        // translation for a value object's own equality operator on a
-        // ComplexProperty isn't guaranteed, but comparing its individual
-        // mapped columns (Year, Month) always translates correctly.
+        // Field by field, not `b.Period == period`: EF Core can't reliably
+        // translate a complex property's equality operator to SQL.
         public Task<Budget?> GetByCategoryAndPeriodAsync(
             CategoryId categoryId, BudgetPeriod period, CancellationToken cancellationToken = default) =>
             _context.Budgets.SingleOrDefaultAsync(

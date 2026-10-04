@@ -60,9 +60,6 @@ namespace FinanceTracker.Api.Transactions
             return NoContent();
         }
 
-        // The first DELETE action in the API: no request body, no response
-        // body -- just "this either happened (204) or the id did not
-        // resolve to anything (404)."
         [HttpDelete("{id:guid}")]
         public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
         {
@@ -75,11 +72,7 @@ namespace FinanceTracker.Api.Transactions
             return NoContent();
         }
 
-        // Modeled as replacing the value of a "category" sub-resource on the
-        // Transaction, rather than a partial PATCH of the whole Transaction --
-        // it's the only field this action ever touches, and PUT's "set this
-        // to exactly this value" semantics fit a nullable CategoryId well:
-        // an absent/null body value means "clear it."
+        // PUT on a "category" sub-resource; a null CategoryId clears it.
         [HttpPut("{id:guid}/category")]
         public async Task<IActionResult> Categorize(Guid id, CategorizeTransactionRequest request, CancellationToken cancellationToken)
         {
@@ -93,11 +86,8 @@ namespace FinanceTracker.Api.Transactions
             return NoContent();
         }
 
-        // AccountId, From and To all come from the query string, not the
-        // route or a body -- GET requests don't have a body, and AccountId
-        // here is a filter on the Transaction list, not a parent resource
-        // in the URL (Transaction is its own top-level aggregate/controller,
-        // per ADR 0004 -- this deliberately isn't nested under /api/accounts).
+        // AccountId is a filter, not a parent resource: Transaction is its
+        // own aggregate, so this isn't nested under /api/accounts.
         [HttpGet]
         public async Task<IActionResult> GetTransactions(
             [FromQuery] Guid accountId, [FromQuery] DateOnly? from, [FromQuery] DateOnly? to, CancellationToken cancellationToken)
@@ -123,10 +113,6 @@ namespace FinanceTracker.Api.Transactions
             return Ok(response);
         }
 
-        // spending-summary is its own literal path segment, not a route
-        // parameter -- it reports across every Transaction matching
-        // AccountId+Year+Month, so there's no single Transaction id to
-        // hang this off of the way Categorize hangs off {id}.
         [HttpGet("spending-summary")]
         public async Task<IActionResult> GetSpendingSummary(
             [FromQuery] Guid accountId, [FromQuery] int year, [FromQuery] int month, CancellationToken cancellationToken)
@@ -144,12 +130,8 @@ namespace FinanceTracker.Api.Transactions
             return Ok(response);
         }
 
-        // Same shape as spending-summary above (its own literal path
-        // segment, AccountId+Year+Month from the query string), extended
-        // with an AI-generated Narrative. This never fails because the AI
-        // call failed -- GetSpendingInsightsQueryHandler already degrades
-        // to a templated Narrative on that path and still returns
-        // Result.Success; see docs/adr/0010-ai-insights-provider-and-integration-design.md.
+        // Never fails because of the AI: the handler falls back to a
+        // templated Narrative.
         [HttpGet("spending-insights")]
         public async Task<IActionResult> GetSpendingInsights(
             [FromQuery] Guid accountId, [FromQuery] int year, [FromQuery] int month, CancellationToken cancellationToken)
@@ -176,13 +158,8 @@ namespace FinanceTracker.Api.Transactions
             return Ok(response);
         }
 
-        // The file arrives as multipart/form-data (see ImportTransactionsRequest's
-        // own doc comment for why that one DTO isn't a record). Parsing the raw
-        // CSV text into structured rows is this layer's job (ADR 0006); the
-        // import itself runs later in the Worker (ADR 0016). A row that fails
-        // to parse is recorded on the import job the same way a row that
-        // fails a domain rule later is: as an entry in its Errors, never as a
-        // request-level failure.
+        // Parses the CSV here; the import itself runs later in the Worker
+        // (ADR 0016). Unparseable rows are recorded on the job's Errors.
         [HttpPost("import")]
         public async Task<IActionResult> Import([FromForm] ImportTransactionsRequest request, CancellationToken cancellationToken)
         {
@@ -202,10 +179,8 @@ namespace FinanceTracker.Api.Transactions
 
             var (rows, parseErrors) = CsvTransactionRowParser.Parse(csvContent);
 
-            // Not a single row parsed (or the file had no data rows at
-            // all): there's nothing to import, so no job is created and the
-            // uploader gets the parse errors immediately, in the response,
-            // instead of being sent off to poll a job with nothing in it.
+            // Nothing to import: return the parse errors now instead of a
+            // job with nothing in it.
             if (rows.Count == 0)
             {
                 var problem = new ProblemDetails
@@ -227,9 +202,7 @@ namespace FinanceTracker.Api.Transactions
             if (result.IsFailure)
                 return result.ToActionResult();
 
-            // 202 Accepted: "your request is valid and has been taken on,
-            // but the work isn't done yet". The Location header tells the
-            // client where to poll for the outcome (ADR 0016).
+            // 202 Accepted, with the job to poll in the Location header.
             var importJobId = result.Value.Value;
             return Accepted($"/api/imports/{importJobId}", new StartImportResponse(importJobId));
         }
