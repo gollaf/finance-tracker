@@ -31,9 +31,10 @@ namespace FinanceTracker.Infrastructure
         {
             var connectionString = configuration.GetConnectionString("FinanceTracker")
                 ?? throw new InvalidOperationException(
-                    "Connection string 'FinanceTracker' was not found. Set it via User Secrets " +
-                    "in development (see the Step 4 setup notes) -- it must never be committed " +
-                    "to appsettings.json.");
+                    "Connection string 'FinanceTracker' is not configured. Set " +
+                    "ConnectionStrings:FinanceTracker through User Secrets or the " +
+                    "ConnectionStrings__FinanceTracker environment variable -- never in " +
+                    "appsettings.json.");
 
             services.AddDbContext<FinanceTrackerDbContext>(options => options.UseNpgsql(connectionString));
 
