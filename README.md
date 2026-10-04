@@ -45,7 +45,7 @@ Data: PostgreSQL
 Messaging: RabbitMQ (raw RabbitMQ.Client) · transactional outbox
 AI: Groq free-tier LLM API
 Testing: xUnit · FluentAssertions · NSubstitute · Testcontainers
-Infra: Docker · Kubernetes · GitHub Actions
+Infra: Docker · Kubernetes · GitHub Actions · GitHub Container Registry
 Frontend (planned): Angular
 
 ## Getting Started
@@ -137,6 +137,34 @@ Testcontainers — Docker must be running. `FinanceTracker.Worker.IntegrationTes
 runs the whole asynchronous pipeline end to end, with only the AI replaced
 by a stub.
 
+## Continuous Integration and Delivery
+
+Every pull request and every push to `master` runs
+[`.github/workflows/ci.yml`](./.github/workflows/ci.yml) on GitHub Actions
+([ADR 0022](./docs/adr/0022-ci-pipeline-and-image-publishing.md)):
+
+```
+pull request / push to master
+  ├─ build-and-test ── restore, build, every test suite (Testcontainers included),
+  │     │               results as a check and a run summary
+  │     └─ docker-image (api), docker-image (worker)
+  │            build both images; on master also push them to ghcr.io
+  └─ k8s-manifests ── kustomize build deploy/k8s, validated by kubeconform
+```
+
+All four checks must pass before a pull request can be merged into
+`master`. Each `master` build publishes its images to GitHub Container
+Registry, public and pullable without logging in:
+
+```bash
+docker pull ghcr.io/gollaf/finance-tracker-api:latest           # newest master build
+docker pull ghcr.io/gollaf/finance-tracker-worker:sha-4fc8fb3   # one exact commit
+```
+
+`sha-<commit>` never changes and is what a deployment should use; `latest`
+moves with every build. The local cluster keeps using its own `:dev` images
+(see "Running on Kubernetes (local)" above).
+
 ## AI-Powered Spending Insights
 
 `GET /api/transactions/spending-insights?accountId=...&year=...&month=...`
@@ -225,6 +253,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0019 — Local Kubernetes cluster and manifest layout](./docs/adr/0019-local-kubernetes-cluster-and-manifests.md)
 - [0020 — Application images and rollout in the local cluster](./docs/adr/0020-application-images-and-rollout-in-the-local-cluster.md)
 - [0021 — Worker in Kubernetes: no health probes, explicit shutdown window](./docs/adr/0021-worker-probes-and-shutdown-in-kubernetes.md)
+- [0022 — CI pipeline and container image publishing](./docs/adr/0022-ci-pipeline-and-image-publishing.md)
 
 ## License
 
