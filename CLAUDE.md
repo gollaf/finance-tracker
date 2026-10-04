@@ -32,6 +32,12 @@ PostgreSQL, RabbitMQ, Ollama/Groq for AI features. Full plan and roadmap:
   Kubernetes (local)" -- manifests in `deploy/k8s/`, applied with
   `kubectl apply -k deploy/k8s`; `deploy/k8s/secrets.env` is gitignored and
   must never be committed
+- CI: `.github/workflows/ci.yml` (ADR 0022). Its jobs `build-and-test`,
+  `docker-image (api)`, `docker-image (worker)` and `k8s-manifests` are
+  required checks for merging into `master` -- renaming any of them also
+  means updating the repository ruleset, or the old name blocks every PR.
+  Images are pushed to `ghcr.io/gollaf/finance-tracker-{api,worker}` from
+  `master` only
 
 ## Constraints
 

@@ -36,7 +36,7 @@ GetImportJob (Phase 5)
 | Testing | xUnit, FluentAssertions, NSubstitute, Testcontainers | |
 | Containers | Docker, Kubernetes (Minikube locally; plain manifests + Kustomize) | See ADRs 0019-0021 |
 | Deployment | Oracle Cloud free VM (persistent), AWS (timeboxed learning sprint) | |
-| CI/CD | GitHub Actions | |
+| CI/CD | GitHub Actions; images published to GitHub Container Registry | Build, test, image build and manifest validation on every PR; images pushed from `master`; see ADR 0022 |
 | Frontend | Angular (later phase) | |
 
 ## Architecture
@@ -65,7 +65,7 @@ Clean Architecture, dependency rule points inward:
 - [x] **Phase 4** — AI feature, synchronous first version
 - [x] **Phase 5** — Async processing via RabbitMQ (AI categorization + CSV import, transactional outbox)
 - [x] **Phase 6** — Kubernetes locally (Minikube: API ×2, migrations Job, Worker split into relay + scalable consumers, RabbitMQ, Postgres)
-- [ ] **Phase 7** — CI/CD via GitHub Actions
+- [x] **Phase 7** — CI/CD via GitHub Actions (tests with a report, API/Worker images built on every PR and published to GHCR from `master`, Kubernetes manifests validated, `master` protected by required checks)
 - [ ] **Phase 8** — Deploy: Oracle free VM (persistent), AWS sprint (timeboxed)
 - [ ] **Phase 9** — Angular frontend
 
