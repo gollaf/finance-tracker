@@ -166,3 +166,64 @@ jobs:
           push: ${{ env.PUBLISH == 'true' }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  # Checks that deploy/k8s still renders and that every object it renders is
+  # valid Kubernetes YAML -- a misspelled field, a value of the wrong type, an
+  # object whose apiVersion this Kubernetes version doesn't have. Nothing is
+  # applied anywhere: this job never talks to a cluster.
+  k8s-manifests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # Pinned versions, each with the SHA-256 of its release archive from the
+      # project's published checksums file, so an archive that was swapped or
+      # corrupted is refused instead of run.
+      KUSTOMIZE_VERSION: v5.8.2
+      KUSTOMIZE_SHA256: 06af0a202c2b831207d0173f9c9cdb1b30abceca0747cb3fbb72792d26055c95
+      KUBECONFORM_VERSION: v0.8.0
+      KUBECONFORM_SHA256: 9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883
+      # The Kubernetes version the manifests are checked against -- the one
+      # the local Minikube cluster runs (ADR 0019).
+      KUBERNETES_VERSION: 1.37.0
+    steps:
+      - uses: actions/checkout@v7
+
+      # Both tools are single binaries from their GitHub releases. They go to
+      # a folder outside the checkout; GITHUB_PATH puts that folder on PATH
+      # for every later step of this job.
+      - name: Install kustomize and kubeconform
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          cd "$RUNNER_TEMP"
+
+          curl -fsSL -o kustomize.tar.gz \
+            "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz"
+          echo "${KUSTOMIZE_SHA256}  kustomize.tar.gz" | sha256sum --check
+          tar -xzf kustomize.tar.gz -C bin kustomize
+
+          curl -fsSL -o kubeconform.tar.gz \
+            "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          echo "${KUBECONFORM_SHA256}  kubeconform.tar.gz" | sha256sum --check
+          tar -xzf kubeconform.tar.gz -C bin kubeconform
+
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      # kustomization.yaml builds the Secret from deploy/k8s/secrets.env, which
+      # is gitignored and so never exists on a runner -- without it the render
+      # fails before validating anything. The committed example has the same
+      # keys with placeholder values, which is all a render needs. Real
+      # credentials never come near CI.
+      - name: Use the example secrets file
+        run: cp deploy/k8s/secrets.env.example deploy/k8s/secrets.env
+
+      # The same combined YAML `kubectl apply -k deploy/k8s` would send to the
+      # cluster.
+      - name: Render the manifests
+        run: kustomize build deploy/k8s > "$RUNNER_TEMP/rendered.yaml"
+
+      # Validates every rendered object against the official schema of its
+      # kind for KUBERNETES_VERSION. -strict also rejects fields the schema
+      # doesn't define: without it, a misspelled field name is silently
+      # ignored -- by this check and by Kubernetes itself.
+      - name: Validate against the Kubernetes schemas
+        run: kubeconform -strict -summary -kubernetes-version "$KUBERNETES_VERSION" "$RUNNER_TEMP/rendered.yaml"
