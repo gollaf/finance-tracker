@@ -85,3 +85,48 @@ jobs:
           path: TestResults/*.trx
           reporter: dotnet-trx
           list-tests: failed
+
+  # Builds the Api and Worker images exactly as `docker build` does on a
+  # laptop, without pushing them anywhere. A Dockerfile can break without any
+  # test noticing -- a new project the build stage doesn't COPY, a renamed
+  # .csproj -- and this job is what catches it.
+  docker-image:
+    name: docker-image (${{ matrix.image }})
+    # Images are only worth building from code that passed its tests.
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      # Builds both images even when one fails, so a single run shows every
+      # broken Dockerfile instead of only the first.
+      fail-fast: false
+      matrix:
+        include:
+          - image: api
+            dockerfile: src/FinanceTracker.Api/Dockerfile
+          - image: worker
+            dockerfile: src/FinanceTracker.Worker/Dockerfile
+    steps:
+      # The build context is this checked-out folder, the same "." as on a
+      # laptop, so .dockerignore applies exactly as it does there.
+      - uses: actions/checkout@v7
+
+      # A BuildKit builder in its own container. The runner's default builder
+      # (the plain "docker" driver) only supports the GitHub Actions cache
+      # backend with Docker's containerd image store, which isn't enabled there.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      # Layers are cached in the GitHub Actions cache, under one scope per
+      # image: with a shared scope each image's cache would overwrite the
+      # other's. mode=max also caches the layers of the build stage -- where
+      # the slow `dotnet restore` runs -- not only those of the final image.
+      - name: Build image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          tags: finance-tracker-${{ matrix.image }}:ci
+          push: false
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
