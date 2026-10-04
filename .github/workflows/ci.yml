@@ -5,17 +5,61 @@ on:
     branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
+  # Adds a "Run workflow" button on the Actions tab, for re-running CI by hand
+  # without pushing a commit.
+  workflow_dispatch:
+
+# The default rights of the automatic GITHUB_TOKEN for every job in this file:
+# read the repository, nothing else. A job that needs more declares its own
+# `permissions:` block -- which then *replaces* this one for that job rather
+# than adding to it, so it has to repeat `contents: read`.
+permissions:
+  contents: read
+
+# At most one run per workflow and branch at a time. On a pull request a new
+# push makes the older run pointless, so it is cancelled. On master every run
+# is kept: each one checks a commit that really landed.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Skips the .NET first-run banner and telemetry upload on every fresh runner.
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    # The default is 6 hours. A hung test container start should fail in
+    # minutes, not keep a runner busy for the rest of the day.
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      # Lets the test report step publish its results as a check on the
+      # commit or pull request.
+      checks: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
+
+      # Restores ~/.nuget/packages from an earlier run, so `dotnet restore`
+      # only downloads what changed. The key is a hash of every .csproj: any
+      # added, removed or bumped package changes a .csproj, which changes the
+      # key. On a miss, restore-keys falls back to the newest cache of any
+      # earlier package set -- most packages are still the same -- and a new
+      # cache is saved under the new key once the job succeeds.
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
 
       - name: Restore dependencies
         run: dotnet restore
@@ -23,5 +67,21 @@ jobs:
       - name: Build
         run: dotnet build --no-restore
 
+      # One .trx file per test project in TestResults/. No LogFileName on
+      # purpose: a fixed file name is reused by every test project, each one
+      # overwriting the last, while the default name is unique per project.
       - name: Test
-        run: dotnet test --no-build --verbosity normal
+        id: test
+        run: dotnet test --no-build --verbosity normal --logger trx --results-directory TestResults
+
+      # Runs after failing tests too -- that is when the report matters most.
+      # Skipped when the Test step never ran (a failed build), since there
+      # would be no results to report.
+      - name: Test report
+        if: ${{ !cancelled() && steps.test.outcome != 'skipped' }}
+        uses: dorny/test-reporter@v3
+        with:
+          name: Test results
+          path: TestResults/*.trx
+          reporter: dotnet-trx
+          list-tests: failed
