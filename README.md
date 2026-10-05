@@ -1,26 +1,50 @@
 # Finance Tracker
 
 [![build](https://github.com/gollaf/finance-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/gollaf/finance-tracker/actions/workflows/ci.yml)
-![license](https://img.shields.io/badge/license-MIT-blue)
+[![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 ![.NET](https://img.shields.io/badge/.NET-10-purple)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue)
+![RabbitMQ](https://img.shields.io/badge/RabbitMQ-4-orange)
 
-> 🚧 Personal portfolio project, under active development. See
-> [`PROJECT_PLAN.md`](./PROJECT_PLAN.md) for the full roadmap.
+A personal finance API: record transactions by hand or by CSV import, have
+them categorized by rules or by AI, set monthly budgets, and get
+plain-language summaries of where the money went.
 
-A personal finance tracker with AI-powered spending insights — add
-transactions, get them auto-categorized, set budgets, and get plain-language
-summaries of your spending instead of just raw charts.
+It is a portfolio project, built to practise backend architecture and
+operations end to end -- from the domain model to messaging, containers,
+Kubernetes and CI/CD. Every significant decision is written up as an
+[Architecture Decision Record](./docs/adr).
 
-## Why This Project
+## Highlights
 
-Built to use Clean Architecture, CQRS, Docker, Kubernetes, RabbitMQ, and
-AI integration hands-on, coming from a .NET/Angular background. Every
-architectural decision is written up in [`docs/adr/`](./docs/adr).
+- **Clean Architecture with CQRS** -- Domain, Application, Infrastructure,
+  Api and Worker projects with the dependency rule pointing inward. Use
+  cases are MediatR commands and queries; input is validated once, in a
+  [pipeline behavior](./src/FinanceTracker.Application/Common/ValidationBehavior.cs),
+  and failures are returned as `Result` values that map to HTTP status codes
+  in [one place](./src/FinanceTracker.Api/Common/ResultExtensions.cs).
+- **Reliable asynchronous processing** -- a
+  [transactional outbox](./docs/adr/0013-transactional-outbox.md) stores each
+  event in the same database transaction as the change it describes, and a
+  relay publishes it to RabbitMQ. Delivery is at-least-once, with retries, a
+  dead-letter queue per consumer, and idempotent consumers.
+- **AI that never invents numbers** -- spending figures are computed in
+  code; the LLM only puts them into words, and the endpoint falls back to a
+  templated summary when the AI is unavailable. AI categorization may only
+  choose an existing category and never overwrites one the user set.
+- **Tests against real infrastructure** -- unit tests for every handler and
+  validator, plus integration tests on real PostgreSQL and RabbitMQ
+  containers (Testcontainers), including end-to-end tests of the whole
+  outbox -> RabbitMQ -> Worker pipeline.
+- **Kubernetes** -- the full system runs on a local cluster: migrations as a
+  separate Job, the outbox relay as a single-replica Deployment, and
+  scalable Worker consumers.
+- **CI/CD** -- every pull request is built, tested and has both Docker
+  images built and the Kubernetes manifests validated; `master` publishes
+  the images to GitHub Container Registry and is protected by required
+  checks.
 
 ## Architecture
-
-Clean Architecture with the dependency rule pointing inward:
 
 ```
 API  ──▶  Application  ──▶  Domain
@@ -28,27 +52,37 @@ Worker  ──▶  Application  ──▶  Domain
 Infrastructure  ──▶  Application  ──▶  Domain
 ```
 
-- **Domain** — entities, value objects, business rules. No external dependencies.
-- **Application** — use cases (CQRS via MediatR), validation, interfaces for
-  everything external.
-- **Infrastructure** — EF Core + PostgreSQL, the transactional outbox,
-  RabbitMQ publisher/consumer plumbing, the Groq AI client.
-- **API** — ASP.NET Core Web API, DI composition root.
-- **Worker** — a second composition root with no HTTP: relays outbox events
-  to RabbitMQ and consumes them — AI categorization of new transactions and
-  background CSV import.
+- **Domain** -- entities, value objects, business rules. No external dependencies.
+- **Application** -- use cases (CQRS via MediatR), validation, and
+  interfaces for everything external.
+- **Infrastructure** -- EF Core + PostgreSQL, the transactional outbox,
+  RabbitMQ publishing and consuming, the Groq AI client.
+- **Api** -- ASP.NET Core Web API.
+- **Worker** -- a second process with no HTTP: relays outbox events to
+  RabbitMQ and consumes them (AI categorization, background CSV import).
+
+```
+API ── one DB commit: change + outbox row ──▶ Postgres ◀── OutboxRelay (Worker)
+                                                              │ publish
+                                                              ▼
+                                                   RabbitMQ ──▶ Worker consumers
+```
 
 ## Tech Stack
 
-Backend: .NET 10 · EF Core · MediatR · FluentValidation
-Data: PostgreSQL
-Messaging: RabbitMQ (raw RabbitMQ.Client) · transactional outbox
-AI: Groq free-tier LLM API
-Testing: xUnit · FluentAssertions · NSubstitute · Testcontainers
-Infra: Docker · Kubernetes · GitHub Actions · GitHub Container Registry
-Frontend (planned): Angular
+| Area | Technologies |
+|---|---|
+| Backend | .NET 10, ASP.NET Core, MediatR, FluentValidation |
+| Data | PostgreSQL 16, EF Core |
+| Messaging | RabbitMQ 4 (raw `RabbitMQ.Client`), transactional outbox |
+| AI | Groq free-tier LLM API (OpenAI-compatible) |
+| Testing | xUnit, FluentAssertions, NSubstitute, Testcontainers |
+| Infrastructure | Docker, docker compose, Kubernetes (Minikube) with Kustomize |
+| CI/CD | GitHub Actions, GitHub Container Registry |
 
 ## Getting Started
+
+Requires Docker.
 
 ```bash
 git clone https://github.com/gollaf/finance-tracker.git
@@ -56,19 +90,91 @@ cd finance-tracker
 docker compose up
 ```
 
-This starts PostgreSQL, RabbitMQ, the API, and the Worker. Once running:
+This starts PostgreSQL, RabbitMQ, the Api and the Worker. Then open:
 
-- Interactive API docs (Scalar, Development only): `http://localhost:5000/scalar/v1`
-- Liveness/readiness health endpoints: `/health/live` and `/health/ready`
+- Interactive API docs (Scalar): `http://localhost:5000/scalar/v1`
+- Health endpoints: `http://localhost:5000/health/live` and `/health/ready`
 - RabbitMQ management UI: `http://localhost:15672` (user and password
   `financetracker`, local development only)
 
+**Optional: real AI.** Without an API key everything still works -- AI
+summaries fall back to a templated text and transactions simply stay
+uncategorized. To enable it, get a free key at console.groq.com (no credit
+card) and put it in a `.env` file in the repository root, which is
+gitignored:
+
+```
+GROQ_API_KEY=gsk_...
+```
+
+For `dotnet run` outside Docker, use User Secrets instead:
+`dotnet user-secrets set "Groq:ApiKey" "gsk_..."` (from `src/FinanceTracker.Api`).
+
+## API Overview
+
+| Method | Route | Purpose |
+|---|---|---|
+| POST | `/api/accounts` | Create an account |
+| GET | `/api/accounts/{id}/balance` | Balance, computed from its transactions |
+| POST | `/api/categories` | Create a category |
+| POST | `/api/categorization-rules` | Create a rule that categorizes by description |
+| POST | `/api/transactions` | Add a transaction |
+| PUT | `/api/transactions/{id}` | Update a transaction |
+| DELETE | `/api/transactions/{id}` | Delete a transaction |
+| PUT | `/api/transactions/{id}/category` | Set or clear its category |
+| GET | `/api/transactions?accountId=&from=&to=` | List an account's transactions |
+| GET | `/api/transactions/spending-summary?accountId=&year=&month=` | Spending by category for a month |
+| GET | `/api/transactions/spending-insights?accountId=&year=&month=` | AI summary of this month vs the 3-month average |
+| POST | `/api/transactions/import` | Start a CSV import (multipart: `AccountId`, `File`) -- returns `202 Accepted` |
+| GET | `/api/imports/{id}` | Import job status and rejected rows |
+| POST | `/api/budgets` | Create a monthly budget for a category |
+| PUT | `/api/budgets/{id}` | Change a budget's limit |
+| GET | `/api/budgets/{id}/status` | Spending against the budget |
+
+Every new transaction publishes a `TransactionAdded` event; if no rule
+matched it, the Worker asks the AI to pick one of your existing categories
+([ADR 0014](./docs/adr/0014-ai-transaction-categorization.md)). A CSV import
+runs in the Worker in a single database transaction, so a crash never leaves
+a file half-imported or a row imported twice
+([ADR 0016](./docs/adr/0016-asynchronous-csv-import.md)).
+
+## Running Tests
+
+```bash
+dotnet test
+```
+
+Integration tests start real PostgreSQL and RabbitMQ containers through
+Testcontainers, so Docker must be running. Only the AI is replaced by a stub;
+the tests that call the real Groq API run only when `GROQ_API_KEY` is set.
+
+## Continuous Integration and Delivery
+
+Every pull request and every push to `master` runs
+[`.github/workflows/ci.yml`](./.github/workflows/ci.yml)
+([ADR 0022](./docs/adr/0022-ci-pipeline-and-image-publishing.md)):
+
+```
+pull request / push to master
+  ├─ build-and-test ── restore, build, every test suite, results as a check
+  │     └─ docker-image (api), docker-image (worker)
+  │            build both images; on master also push them to ghcr.io
+  └─ k8s-manifests ── kustomize build deploy/k8s, validated by kubeconform
+```
+
+All four checks must pass before a pull request can be merged. Images
+published from `master` are public:
+
+```bash
+docker pull ghcr.io/gollaf/finance-tracker-api:latest           # newest master build
+docker pull ghcr.io/gollaf/finance-tracker-worker:sha-4fc8fb3   # one exact commit
+```
+
 ## Running on Kubernetes (local)
 
-The same system also runs on a local [Minikube](https://minikube.sigs.k8s.io/)
-cluster, from plain manifests in [`deploy/k8s/`](./deploy/k8s) combined
-with Kustomize. It runs next to docker compose, not instead of it: a
-separate database, separate data, nothing shared.
+The same system runs on a local [Minikube](https://minikube.sigs.k8s.io/)
+cluster from plain manifests in [`deploy/k8s/`](./deploy/k8s), combined with
+Kustomize ([ADRs 0017-0021](./docs/adr)).
 
 ```
 namespace finance-tracker
@@ -79,7 +185,10 @@ namespace finance-tracker
   postgres, rabbitmq (StatefulSets, each with its own PersistentVolumeClaim)
 ```
 
-**One-time setup** (Docker Desktop running; PowerShell shown):
+<details>
+<summary>Setup and commands (PowerShell)</summary>
+
+**One-time setup** (Docker Desktop running):
 
 ```powershell
 winget install Kubernetes.minikube
@@ -122,111 +231,35 @@ migration, first run `kubectl delete job migrate -n finance-tracker
 **Stop / clean up:** `minikube stop` pauses everything and keeps the data;
 `minikube delete` removes the cluster and its data.
 
-The reasoning behind each piece is in ADRs 0017-0021: migrations as a
-separate step, Worker roles, the cluster layout and Secrets, images and
-rollouts, and why the Worker has no health probes.
-
-## Running Tests
-
-```bash
-dotnet test
-```
-
-Integration tests spin up real PostgreSQL and RabbitMQ instances via
-Testcontainers — Docker must be running. `FinanceTracker.Worker.IntegrationTests`
-runs the whole asynchronous pipeline end to end, with only the AI replaced
-by a stub.
-
-## Continuous Integration and Delivery
-
-Every pull request and every push to `master` runs
-[`.github/workflows/ci.yml`](./.github/workflows/ci.yml) on GitHub Actions
-([ADR 0022](./docs/adr/0022-ci-pipeline-and-image-publishing.md)):
-
-```
-pull request / push to master
-  ├─ build-and-test ── restore, build, every test suite (Testcontainers included),
-  │     │               results as a check and a run summary
-  │     └─ docker-image (api), docker-image (worker)
-  │            build both images; on master also push them to ghcr.io
-  └─ k8s-manifests ── kustomize build deploy/k8s, validated by kubeconform
-```
-
-All four checks must pass before a pull request can be merged into
-`master`. Each `master` build publishes its images to GitHub Container
-Registry, public and pullable without logging in:
-
-```bash
-docker pull ghcr.io/gollaf/finance-tracker-api:latest           # newest master build
-docker pull ghcr.io/gollaf/finance-tracker-worker:sha-4fc8fb3   # one exact commit
-```
-
-`sha-<commit>` never changes and is what a deployment should use; `latest`
-moves with every build. The local cluster keeps using its own `:dev` images
-(see "Running on Kubernetes (local)" above).
-
-## AI-Powered Spending Insights
-
-`GET /api/transactions/spending-insights?accountId=...&year=...&month=...`
-computes this-month-vs-prior-3-month-average spending per category, then
-asks an LLM (Groq's free-tier API, OpenAI-compatible) to describe the
-numbers in plain language. The AI only ever rewords numbers the API already
-computed — it never invents its own — and a failed or unconfigured AI call
-degrades gracefully to a templated narrative instead of failing the
-request. See [ADR 0010](./docs/adr/0010-ai-insights-provider-and-integration-design.md)
-for the full design rationale.
-
-To enable real AI narratives locally, set a free Groq API key
-(console.groq.com, no credit card required):
-
-```bash
-# dotnet run (from src/FinanceTracker.Api)
-dotnet user-secrets set "Groq:ApiKey" "gsk_..."
-
-# docker compose up — put this in a gitignored .env file at the repo root
-GROQ_API_KEY=gsk_...
-```
-
-Without a key, the endpoint still works — `narrativeGeneratedByAi` is
-`false` and `narrative` is a templated fallback built from the same
-per-category numbers.
-
-## Asynchronous Processing
-
-Work that doesn't need to finish inside an HTTP request runs in the Worker,
-driven by RabbitMQ ([ADR 0011](./docs/adr/0011-async-messaging-rabbitmq-raw-client.md)):
-
-```
-API ── one DB commit: change + outbox row ──▶ Postgres ◀── OutboxRelay (Worker)
-                                                              │ publish
-                                                              ▼
-                                                   RabbitMQ ──▶ Worker consumers
-```
-
-- **Transactional outbox** — an event is stored in the same database
-  transaction as the change it describes, then relayed to RabbitMQ, so it
-  can't be lost between the two ([ADR 0013](./docs/adr/0013-transactional-outbox.md)).
-  Delivery is at-least-once with manual acks, retries, and a dead-letter
-  queue per consumer, and every consumer is idempotent
-  ([ADR 0012](./docs/adr/0012-rabbitmq-topology-and-delivery-guarantees.md)).
-- **AI categorization** — every new transaction publishes `TransactionAdded`.
-  If no categorization rule matched it, the Worker asks the AI to pick one of
-  your existing categories; the AI can't invent categories or overwrite one
-  you set yourself ([ADR 0014](./docs/adr/0014-ai-transaction-categorization.md)).
-  The Worker uses the same `GROQ_API_KEY` as above; without it, transactions
-  simply stay uncategorized.
-- **CSV import** — `POST /api/transactions/import` (multipart: `AccountId`,
-  `File`) parses the file and answers `202 Accepted` with an import job id
-  and a `Location` header. Poll `GET /api/imports/{id}` for the outcome:
-  the imported count and every rejected row by line number. The whole
-  import runs in one database transaction, so a crash never leaves a file
-  half-imported or a row imported twice
-  ([ADR 0016](./docs/adr/0016-asynchronous-csv-import.md)).
+</details>
 
 ## Roadmap
 
-See [`PROJECT_PLAN.md`](./PROJECT_PLAN.md) for the full phase-by-phase plan
-and current progress.
+Done: domain and use cases, persistence and API, Docker, AI insights,
+asynchronous processing with RabbitMQ, Kubernetes, and CI/CD. Next:
+
+- **Cloud deployment**
+  - **Oracle Cloud Always Free VM** -- the permanent, always-on public demo.
+  - **Azure sprint** (timeboxed, within the free trial credit) -- Azure
+    Container Apps, Application Insights via OpenTelemetry, infrastructure
+    as code with Bicep, and passwordless deployment from GitHub Actions.
+  - **AWS sprint** (timeboxed, on the free plan) -- the same system on AWS's
+    managed container services, to compare the two platforms.
+- **Authentication** -- required before the API is exposed publicly.
+- **Angular frontend.**
+
+The phase-by-phase plan is in [`PROJECT_PLAN.md`](./PROJECT_PLAN.md).
+
+## Known Limitations
+
+- **No authentication yet.** Every endpoint is open; this is fine on a local
+  machine and is the first thing to add before a public deployment.
+- **Local-development configuration.** docker compose and the Kubernetes
+  manifests run in the Development environment (API docs and exception
+  details enabled) with local-only credentials.
+- **One outbox relay at a time.** This is enforced by deployment
+  configuration, not code; running several would need row locking
+  (`FOR UPDATE SKIP LOCKED`).
 
 ## Architecture Decisions
 
@@ -257,4 +290,4 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 
 ## License
 
-MIT
+[MIT](./LICENSE) © 2026 Ihar Dziamidka
