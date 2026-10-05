@@ -35,7 +35,7 @@ GetImportJob (Phase 5)
 | AI | Groq free tier (Ollama possible later) | No subscription cost |
 | Testing | xUnit, FluentAssertions, NSubstitute, Testcontainers | |
 | Containers | Docker, Kubernetes (Minikube locally; plain manifests + Kustomize) | See ADRs 0019-0021 |
-| Deployment | Oracle Cloud free VM (persistent), AWS (timeboxed learning sprint) | |
+| Deployment | Oracle Cloud free VM (persistent); Azure and AWS (timeboxed learning sprints) | Oracle hosts the always-on demo; the cloud sprints stay within free credits and are torn down afterwards |
 | CI/CD | GitHub Actions; images published to GitHub Container Registry | Build, test, image build and manifest validation on every PR; images pushed from `master`; see ADR 0022 |
 | Frontend | Angular (later phase) | |
 
@@ -66,7 +66,7 @@ Clean Architecture, dependency rule points inward:
 - [x] **Phase 5** — Async processing via RabbitMQ (AI categorization + CSV import, transactional outbox)
 - [x] **Phase 6** — Kubernetes locally (Minikube: API ×2, migrations Job, Worker split into relay + scalable consumers, RabbitMQ, Postgres)
 - [x] **Phase 7** — CI/CD via GitHub Actions (tests with a report, API/Worker images built on every PR and published to GHCR from `master`, Kubernetes manifests validated, `master` protected by required checks)
-- [ ] **Phase 8** — Deploy: Oracle free VM (persistent), AWS sprint (timeboxed)
+- [ ] **Phase 8** — Deploy: Oracle free VM (persistent), Azure sprint (timeboxed), AWS sprint (timeboxed)
 - [ ] **Phase 9** — Angular frontend
 
 ## Constraints
