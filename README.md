@@ -158,12 +158,14 @@ Every pull request and every push to `master` runs
 pull request / push to master
   ├─ build-and-test ── restore, build, every test suite, results as a check
   │     └─ docker-image (api), docker-image (worker)
-  │            build both images; on master also push them to ghcr.io
+  │            build both images for amd64 and arm64; on master also push them to ghcr.io
   └─ k8s-manifests ── kustomize build deploy/k8s, validated by kubeconform
 ```
 
 All four checks must pass before a pull request can be merged. Images
-published from `master` are public:
+published from `master` are public, and each tag holds an `amd64` and an
+`arm64` build ([ADR 0024](./docs/adr/0024-multi-architecture-images.md)), so
+the same tag runs on an x86 laptop and an Arm server:
 
 ```bash
 docker pull ghcr.io/gollaf/finance-tracker-api:latest           # newest master build
@@ -288,6 +290,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0021 — Worker in Kubernetes: no health probes, explicit shutdown window](./docs/adr/0021-worker-probes-and-shutdown-in-kubernetes.md)
 - [0022 — CI pipeline and container image publishing](./docs/adr/0022-ci-pipeline-and-image-publishing.md)
 - [0023 — Production environment and the API docs setting](./docs/adr/0023-production-environment-and-api-docs-setting.md)
+- [0024 — Multi-architecture images by cross-compiling](./docs/adr/0024-multi-architecture-images.md)
 
 ## License
 
