@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted
+Accepted. The build stage is amended by
+[ADR 0024](./0024-multi-architecture-images.md) to cross-compile for the
+target architecture.
 
 ## Context
 

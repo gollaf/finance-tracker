@@ -9,7 +9,8 @@ FROM mcr.microsoft.com/dotnet/runtime:10.0 AS base
 WORKDIR /app
 
 # ---- Stage 2: build ---------------------------------------------------------
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+ARG TARGETARCH
 WORKDIR /src
 
 # The Worker and every project it references (not the Api).
@@ -17,11 +18,13 @@ COPY ["src/FinanceTracker.Worker/FinanceTracker.Worker.csproj", "src/FinanceTrac
 COPY ["src/FinanceTracker.Application/FinanceTracker.Application.csproj", "src/FinanceTracker.Application/"]
 COPY ["src/FinanceTracker.Domain/FinanceTracker.Domain.csproj", "src/FinanceTracker.Domain/"]
 COPY ["src/FinanceTracker.Infrastructure/FinanceTracker.Infrastructure.csproj", "src/FinanceTracker.Infrastructure/"]
-RUN dotnet restore "src/FinanceTracker.Worker/FinanceTracker.Worker.csproj"
+RUN dotnet restore "src/FinanceTracker.Worker/FinanceTracker.Worker.csproj" -a $TARGETARCH
 
 COPY src/ src/
 RUN dotnet publish "src/FinanceTracker.Worker/FinanceTracker.Worker.csproj" \
     -c Release \
+    -a $TARGETARCH \
+    --no-restore \
     -o /app/publish \
     /p:UseAppHost=false
 
