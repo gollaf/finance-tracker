@@ -287,6 +287,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0020 — Application images and rollout in the local cluster](./docs/adr/0020-application-images-and-rollout-in-the-local-cluster.md)
 - [0021 — Worker in Kubernetes: no health probes, explicit shutdown window](./docs/adr/0021-worker-probes-and-shutdown-in-kubernetes.md)
 - [0022 — CI pipeline and container image publishing](./docs/adr/0022-ci-pipeline-and-image-publishing.md)
+- [0023 — Production environment and the API docs setting](./docs/adr/0023-production-environment-and-api-docs-setting.md)
 
 ## License
 
