@@ -4,8 +4,8 @@ using FluentAssertions;
 namespace FinanceTracker.Api.IntegrationTests.OpenApi
 {
     /// <summary>
-    /// The Development-only OpenAPI and Scalar endpoints are reachable
-    /// (WebApplicationFactory runs the host in Development).
+    /// The OpenAPI and Scalar endpoints are on by default in Development,
+    /// which is where WebApplicationFactory runs the host.
     /// </summary>
     public sealed class OpenApiTests : IClassFixture<CustomWebApplicationFactory>
     {

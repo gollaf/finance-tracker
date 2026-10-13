@@ -65,7 +65,9 @@ if (app.Configuration.GetValue("Database:ApplyMigrationsOnStartup", defaultValue
 
 app.UseExceptionHandler();
 
-if (app.Environment.IsDevelopment())
+// API docs default to Development only. A public demo can turn them on with
+// ApiDocs__Enabled=true: they describe the endpoints, nothing secret.
+if (app.Configuration.GetValue("ApiDocs:Enabled", defaultValue: app.Environment.IsDevelopment()))
 {
     app.MapOpenApi();
     app.MapScalarApiReference();
