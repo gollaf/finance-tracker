@@ -1,5 +1,7 @@
 using FinanceTracker.Api.HealthChecks;
 using FinanceTracker.Api.OpenApi;
+using FinanceTracker.Api.RateLimiting;
+using FinanceTracker.Api.ReverseProxy;
 using FinanceTracker.Application;
 using FinanceTracker.Infrastructure;
 using FinanceTracker.Infrastructure.Persistence;
@@ -56,6 +58,9 @@ builder.Services.AddDataProtection()
     .SetApplicationName("FinanceTracker")
     .PersistKeysToDbContext<FinanceTrackerDbContext>();
 
+builder.Services.AddReverseProxySupport();
+builder.Services.AddApiRateLimiting(builder.Configuration);
+
 var app = builder.Build();
 
 // `dotnet FinanceTracker.Api.dll migrate` applies pending migrations and
@@ -77,7 +82,14 @@ if (app.Configuration.GetValue("Database:ApplyMigrationsOnStartup", defaultValue
     await ApplyMigrationsAsync(app.Services);
 }
 
+// First, so everything after it, the rate limiter included, sees the
+// visitor's address rather than the reverse proxy's.
+app.UseForwardedHeaders();
+
 app.UseExceptionHandler();
+
+// Before authentication: a flood is turned away before any token is decrypted.
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -90,20 +102,23 @@ if (app.Configuration.GetValue("ApiDocs:Enabled", defaultValue: app.Environment.
     app.MapScalarApiReference();
 }
 
-// Liveness runs no checks, so a database problem never fails it.
+// Liveness runs no checks, so a database problem never fails it. Neither
+// probe is rate limited: an orchestrator polls them every few seconds, and a
+// rejected probe would look like a failing instance.
 app.MapHealthChecks("/health/live", new HealthCheckOptions
 {
     Predicate = _ => false
-});
+}).DisableRateLimiting();
 
 // Readiness: the database is reachable and fully migrated.
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains("ready")
-});
+}).DisableRateLimiting();
 
 app.MapGroup("/api/auth")
     .WithTags("Auth")
+    .RequireRateLimiting(RateLimitingSetup.AuthPolicy)
     .MapIdentityApi<IdentityUser<Guid>>();
 
 // Sign-in is required per endpoint group, not with a global fallback policy:

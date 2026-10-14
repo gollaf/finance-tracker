@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Testcontainers.PostgreSql;
@@ -94,9 +95,20 @@ namespace FinanceTracker.Api.IntegrationTests
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
         }
 
-        // Replaces the real Groq client with StubInsightsGenerator.
+        // Replaces the real Groq client with StubInsightsGenerator, and lifts
+        // the rate limits: the suite signs in many users from one test
+        // address. The limits are tested with RateLimitingWebApplicationFactory.
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
+            builder.ConfigureAppConfiguration((_, configuration) =>
+            {
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["RateLimiting:PermitLimit"] = "1000000",
+                    ["RateLimiting:AuthPermitLimit"] = "1000000",
+                });
+            });
+
             builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IInsightsGenerator>();
