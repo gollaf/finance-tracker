@@ -277,6 +277,39 @@ certificate it obtains and renews by itself, and forwards to the Api
 ([ADR 0029](./docs/adr/0029-https-with-caddy-on-a-duckdns-name.md)). The
 RabbitMQ management UI is reachable only through an SSH tunnel.
 
+### Backups
+
+Every night a systemd timer runs [`backup.sh`](./deploy/server/backup.sh): a
+`pg_dump` of the whole database, read back in full to prove it is complete,
+kept on the server for 7 days and uploaded to a private Oracle Object Storage
+bucket that keeps it for 30
+([ADR 0030](./docs/adr/0030-database-backups-to-object-storage.md)). The
+server can only add files to the bucket, through a write-only link in `.env`
+(`BACKUP_UPLOAD_URL`); it can't read or delete them.
+
+On the server, from the deployment folder:
+
+```bash
+bash backup.sh                                   # a backup now
+bash restore-drill.sh                            # restore the newest one into a scratch database and compare
+journalctl -u finance-tracker-backup.service     # what the nightly runs printed
+systemctl list-timers finance-tracker-backup.timer
+```
+
+To replace the live database with a backup -- this deletes the current data:
+
+```bash
+docker compose stop api worker
+docker compose exec postgres dropdb --username=postgres financetracker
+bash restore.sh backups/financetracker-<timestamp>.dump financetracker
+docker compose start api worker
+```
+
+On a new server, download the file from the bucket in the Oracle console,
+copy it into `backups/` with `scp`, start only the database
+(`docker compose up -d postgres`), and run the same `dropdb` and `restore.sh`
+before `docker compose up -d`.
+
 ## Roadmap
 
 Done: domain and use cases, persistence and API, Docker, AI insights,
@@ -299,8 +332,8 @@ The phase-by-phase plan is in [`PROJECT_PLAN.md`](./PROJECT_PLAN.md).
   Kubernetes manifests run in the Development environment (API docs and
   exception details enabled) with local-only credentials; only the server
   deployment runs in Production.
-- **One server, no backups yet.** The public demo runs on a single VM; its
-  data could be lost with it, and may be reset.
+- **One server, daily backups.** The public demo runs on a single VM; a
+  failure can lose up to a day of data, and the demo may be reset.
 - **One outbox relay at a time.** This is enforced by deployment
   configuration, not code; running several would need row locking
   (`FOR UPDATE SKIP LOCKED`).
@@ -338,6 +371,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0027 — Per-user data ownership](./docs/adr/0027-per-user-data-ownership.md)
 - [0028 — Rate limiting and forwarded headers](./docs/adr/0028-rate-limiting-and-forwarded-headers.md)
 - [0029 — HTTPS with Caddy on a DuckDNS name](./docs/adr/0029-https-with-caddy-on-a-duckdns-name.md)
+- [0030 — Database backups to Object Storage](./docs/adr/0030-database-backups-to-object-storage.md)
 
 ## License
 
