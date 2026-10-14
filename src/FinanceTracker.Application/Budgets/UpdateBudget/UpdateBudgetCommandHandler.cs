@@ -15,7 +15,7 @@ namespace FinanceTracker.Application.Budgets.UpdateBudget
 
         public async Task<Result> Handle(UpdateBudgetCommand request, CancellationToken cancellationToken)
         {
-            var budget = await _budgetRepository.GetByIdAsync(request.BudgetId, cancellationToken);
+            var budget = await _budgetRepository.GetByIdAsync(request.OwnerId, request.BudgetId, cancellationToken);
 
             if (budget is null)
             {

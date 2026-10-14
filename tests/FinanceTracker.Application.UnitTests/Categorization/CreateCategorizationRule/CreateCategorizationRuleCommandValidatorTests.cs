@@ -6,14 +6,24 @@ namespace FinanceTracker.Application.UnitTests.Categorization.CreateCategorizati
 {
     public class CreateCategorizationRuleCommandValidatorTests
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
         private readonly CreateCategorizationRuleCommandValidator _validator = new();
 
         [Fact]
         public void Validate_WithValidCommand_IsValid()
         {
-            var command = new CreateCategorizationRuleCommand("walmart", CategoryId.New(), 1);
+            var command = new CreateCategorizationRuleCommand(Owner, "walmart", CategoryId.New(), 1);
 
             _validator.Validate(command).IsValid.Should().BeTrue();
+        }
+
+        [Fact]
+        public void Validate_WithDefaultOwnerId_IsInvalid()
+        {
+            var result = _validator.Validate(new CreateCategorizationRuleCommand(Owner, "walmart", CategoryId.New(), 1) with { OwnerId = default });
+
+            result.IsValid.Should().BeFalse();
+            result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateCategorizationRuleCommand.OwnerId));
         }
 
         [Theory]
@@ -22,7 +32,7 @@ namespace FinanceTracker.Application.UnitTests.Categorization.CreateCategorizati
         [InlineData("   ")]
         public void Validate_WithMissingPattern_IsInvalid(string? pattern)
         {
-            var command = new CreateCategorizationRuleCommand(pattern!, CategoryId.New(), 1);
+            var command = new CreateCategorizationRuleCommand(Owner, pattern!, CategoryId.New(), 1);
 
             var result = _validator.Validate(command);
 
@@ -33,7 +43,7 @@ namespace FinanceTracker.Application.UnitTests.Categorization.CreateCategorizati
         [Fact]
         public void Validate_WithDefaultCategoryId_IsInvalid()
         {
-            var command = new CreateCategorizationRuleCommand("walmart", default, 1);
+            var command = new CreateCategorizationRuleCommand(Owner, "walmart", default, 1);
 
             var result = _validator.Validate(command);
 
@@ -46,7 +56,7 @@ namespace FinanceTracker.Application.UnitTests.Categorization.CreateCategorizati
         {
             // No range check on Priority — CategorizationRule.Create doesn't
             // validate it either, so any int is acceptable input here.
-            var command = new CreateCategorizationRuleCommand("walmart", CategoryId.New(), -1);
+            var command = new CreateCategorizationRuleCommand(Owner, "walmart", CategoryId.New(), -1);
 
             _validator.Validate(command).IsValid.Should().BeTrue();
         }

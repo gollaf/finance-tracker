@@ -52,7 +52,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
 
         private async Task<CategoryId> CreatePersistedCategoryAsync(string name = "Food")
         {
-            var category = Category.Create(name);
+            var category = Category.Create(Owner, name);
             await _categoryRepository.AddAsync(category, CancellationToken.None);
             return category.Id;
         }
@@ -139,10 +139,25 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
             await _repository.AddAsync(inAccountTwo, CancellationToken.None);
             await _repository.AddAsync(uncategorized, CancellationToken.None);
 
-            var results = await _repository.GetByCategoryIdAsync(categoryId, CancellationToken.None);
+            var results = await _repository.GetByCategoryIdAsync(Owner, categoryId, CancellationToken.None);
 
             results.Should().HaveCount(2);
             results.Select(t => t.Id).Should().BeEquivalentTo([inAccountOne.Id, inAccountTwo.Id]);
+        }
+
+        [Fact]
+        public async Task GetByCategoryIdAsync_ForAnotherOwner_ReturnsEmpty()
+        {
+            var accountId = await CreatePersistedAccountAsync("Checking");
+            var categoryId = await CreatePersistedCategoryAsync();
+            await _repository.AddAsync(
+                Transaction.Create(
+                    Owner, accountId, Money.Create(10m, "USD"), TransactionType.Expense, "Coffee", new DateOnly(2026, 9, 1), categoryId),
+                CancellationToken.None);
+
+            var results = await _repository.GetByCategoryIdAsync(new UserId(Guid.NewGuid()), categoryId, CancellationToken.None);
+
+            results.Should().BeEmpty();
         }
 
         [Fact]

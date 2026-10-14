@@ -1,4 +1,5 @@
 using FinanceTracker.Domain.Categorization;
+using FinanceTracker.Domain.Common;
 
 namespace FinanceTracker.Application.Categorization
 {
@@ -9,7 +10,8 @@ namespace FinanceTracker.Application.Categorization
     /// </summary>
     public interface ICategorizationRuleRepository
     {
-        Task<IReadOnlyList<CategorizationRule>> GetAllAsync(CancellationToken cancellationToken = default);
+        Task<IReadOnlyList<CategorizationRule>> GetAllAsync(
+            UserId ownerId, CancellationToken cancellationToken = default);
 
         Task AddAsync(CategorizationRule rule, CancellationToken cancellationToken = default);
     }

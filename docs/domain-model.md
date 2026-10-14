@@ -17,6 +17,7 @@ contexts at this scale.
 
 | Term | Meaning |
 |---|---|
+| Owner | The signed-in user a piece of data belongs to. Every aggregate has exactly one, set at creation and never changed; a user sees and changes only their own data. |
 | Account | A place money is tracked — a checking account, credit card, cash wallet, etc. Does not store a balance itself (see "Balance" below). |
 | Transaction | A single dated movement of money, in or out of one Account. The core unit of the system. |
 | Category | A label for what a Transaction is for (e.g. "Groceries", "Rent"). Can have a parent Category for hierarchy. |
@@ -36,6 +37,9 @@ project; multi-currency conversion is explicitly out of scope.
 **Strongly-typed IDs**
 `AccountId`, `TransactionId`, `CategoryId`, `BudgetId` — each a
 `readonly record struct` wrapping a `Guid`, with a static `New()` factory.
+`UserId` follows the same pattern but has no `New()`: users are created by
+ASP.NET Core Identity, and a `UserId` only ever wraps an existing user's
+key.
 Used everywhere instead of raw `Guid`, including for cross-aggregate
 references, so a `CategoryId` can never accidentally be passed where an
 `AccountId` is expected.
@@ -45,6 +49,12 @@ Year (`int`) + Month (`int`, 1–12). Represents "this calendar month's
 budget." Equality by value; invariant: Month must be in `[1, 12]`.
 
 ## Aggregates
+
+Every aggregate below also has an `OwnerId: UserId`, passed as the first
+argument of its `Create` factory and immutable afterwards; a default
+(empty) owner is rejected. Every repository read is scoped to an owner,
+and another owner's data behaves as if it didn't exist
+(`docs/adr/0027-per-user-data-ownership.md`).
 
 Every cross-aggregate reference below is by ID only — no aggregate holds
 a navigation property to another aggregate's entity. This keeps aggregates
@@ -104,7 +114,8 @@ on every update.
 
 Behavior: `Create(name, parentCategoryId?)`; `Rename(name)`;
 `Reparent(parentCategoryId?)`. Domain-level invariant: a Category cannot
-be its own parent. Cross-instance concerns — name uniqueness, deeper
+be its own parent. Cross-instance concerns — name uniqueness (per
+owner: two users can both have "Groceries"), deeper
 cycle prevention across more than one hop — require querying other
 Categories and so are enforced in the Application layer, not here.
 

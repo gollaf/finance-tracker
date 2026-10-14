@@ -10,16 +10,18 @@ namespace FinanceTracker.Application.UnitTests.Budgets.UpdateBudget
 {
     public class UpdateBudgetCommandHandlerTests
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
+
         [Fact]
         public async Task Handle_WithValidCommand_UpdatesLimitAndSaves()
         {
-            var budget = Budget.Create(CategoryId.New(), BudgetPeriod.Create(2026, 8), Money.Create(300m, "USD"));
+            var budget = Budget.Create(Owner, CategoryId.New(), BudgetPeriod.Create(2026, 8), Money.Create(300m, "USD"));
 
             var repository = Substitute.For<IBudgetRepository>();
-            repository.GetByIdAsync(budget.Id, Arg.Any<CancellationToken>()).Returns(budget);
+            repository.GetByIdAsync(Owner, budget.Id, Arg.Any<CancellationToken>()).Returns(budget);
 
             var handler = new UpdateBudgetCommandHandler(repository);
-            var command = new UpdateBudgetCommand(budget.Id, 500m);
+            var command = new UpdateBudgetCommand(Owner, budget.Id, 500m);
 
             var result = await handler.Handle(command, CancellationToken.None);
 
@@ -32,10 +34,10 @@ namespace FinanceTracker.Application.UnitTests.Budgets.UpdateBudget
         public async Task Handle_WithUnknownBudget_ReturnsNotFound()
         {
             var repository = Substitute.For<IBudgetRepository>();
-            repository.GetByIdAsync(Arg.Any<BudgetId>(), Arg.Any<CancellationToken>()).Returns((Budget?)null);
+            repository.GetByIdAsync(Owner, Arg.Any<BudgetId>(), Arg.Any<CancellationToken>()).Returns((Budget?)null);
 
             var handler = new UpdateBudgetCommandHandler(repository);
-            var command = new UpdateBudgetCommand(BudgetId.New(), 500m);
+            var command = new UpdateBudgetCommand(Owner, BudgetId.New(), 500m);
 
             var result = await handler.Handle(command, CancellationToken.None);
 

@@ -8,6 +8,7 @@ namespace FinanceTracker.Application.Categories.CreateCategory
     /// ParentCategoryId is optional — omit it for a top-level Category. No
     /// cycle check is needed: a new Category can't be anyone's ancestor yet.
     /// </summary>
-    public sealed record CreateCategoryCommand(string Name, CategoryId? ParentCategoryId = null)
+    public sealed record CreateCategoryCommand(
+        UserId OwnerId, string Name, CategoryId? ParentCategoryId = null)
         : IRequest<Result<CategoryId>>;
 }

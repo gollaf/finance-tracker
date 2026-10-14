@@ -6,15 +6,25 @@ namespace FinanceTracker.Application.UnitTests.Budgets.CreateBudget
 {
     public class CreateBudgetCommandValidatorTests
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
         private readonly CreateBudgetCommandValidator _validator = new();
 
         private static CreateBudgetCommand ValidCommand() =>
-            new(CategoryId.New(), 2026, 8, 500m, "USD");
+            new(Owner, CategoryId.New(), 2026, 8, 500m, "USD");
 
         [Fact]
         public void Validate_WithValidCommand_IsValid()
         {
             _validator.Validate(ValidCommand()).IsValid.Should().BeTrue();
+        }
+
+        [Fact]
+        public void Validate_WithDefaultOwnerId_IsInvalid()
+        {
+            var result = _validator.Validate(ValidCommand() with { OwnerId = default });
+
+            result.IsValid.Should().BeFalse();
+            result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateBudgetCommand.OwnerId));
         }
 
         [Fact]

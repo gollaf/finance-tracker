@@ -21,7 +21,7 @@ namespace FinanceTracker.Api.Categories
         public async Task<IActionResult> Create(CreateCategoryRequest request, CancellationToken cancellationToken)
         {
             var parentCategoryId = request.ParentCategoryId is { } id ? new CategoryId(id) : (CategoryId?)null;
-            var command = new CreateCategoryCommand(request.Name, parentCategoryId);
+            var command = new CreateCategoryCommand(User.GetUserId(), request.Name, parentCategoryId);
             var result = await _sender.Send(command, cancellationToken);
 
             if (result.IsFailure)

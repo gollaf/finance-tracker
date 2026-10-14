@@ -11,21 +11,27 @@ namespace FinanceTracker.Domain.Categories
     {
         public CategoryId Id { get; }
 
+        public UserId OwnerId { get; }
+
         public string Name { get; private set; }
 
         public CategoryId? ParentCategoryId { get; private set; }
 
-        private Category(CategoryId id, string name, CategoryId? parentCategoryId)
+        private Category(CategoryId id, UserId ownerId, string name, CategoryId? parentCategoryId)
         {
             Id = id;
+            OwnerId = ownerId;
             Name = name;
             ParentCategoryId = parentCategoryId;
         }
 
-        public static Category Create(string name, CategoryId? parentCategoryId = null)
+        public static Category Create(UserId ownerId, string name, CategoryId? parentCategoryId = null)
         {
+            if (ownerId == default)
+                throw new ArgumentException("A category must have an owner.", nameof(ownerId));
+
             ValidateName(name);
-            return new Category(CategoryId.New(), name.Trim(), parentCategoryId);
+            return new Category(CategoryId.New(), ownerId, name.Trim(), parentCategoryId);
         }
 
         public void Rename(string name)

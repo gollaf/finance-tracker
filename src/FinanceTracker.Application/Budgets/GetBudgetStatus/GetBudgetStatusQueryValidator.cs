@@ -7,6 +7,10 @@ namespace FinanceTracker.Application.Budgets.GetBudgetStatus
     {
         public GetBudgetStatusQueryValidator()
         {
+            RuleFor(q => q.OwnerId)
+                .NotEqual(default(UserId))
+                .WithMessage("OwnerId is required.");
+
             RuleFor(q => q.BudgetId)
                 .NotEqual(default(BudgetId))
                 .WithMessage("BudgetId is required.");

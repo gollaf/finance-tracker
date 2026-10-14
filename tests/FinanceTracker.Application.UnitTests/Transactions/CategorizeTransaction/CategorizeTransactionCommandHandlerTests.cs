@@ -23,13 +23,13 @@ namespace FinanceTracker.Application.UnitTests.Transactions.CategorizeTransactio
         public async Task Handle_WithValidCategoryId_AssignsCategoryAndSaves()
         {
             var transaction = NewTransaction();
-            var category = Category.Create("Dining", parentCategoryId: null);
+            var category = Category.Create(Owner, "Dining", parentCategoryId: null);
 
             var transactionRepository = Substitute.For<ITransactionRepository>();
             transactionRepository.GetByIdAsync(Owner, transaction.Id, Arg.Any<CancellationToken>()).Returns(transaction);
 
             var categoryRepository = Substitute.For<ICategoryRepository>();
-            categoryRepository.GetByIdAsync(category.Id, Arg.Any<CancellationToken>()).Returns(category);
+            categoryRepository.GetByIdAsync(Owner, category.Id, Arg.Any<CancellationToken>()).Returns(category);
 
             var handler = new CategorizeTransactionCommandHandler(transactionRepository, categoryRepository);
             var command = new CategorizeTransactionCommand(Owner, transaction.Id, category.Id);
@@ -58,7 +58,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.CategorizeTransactio
 
             result.IsSuccess.Should().BeTrue();
             transaction.CategoryId.Should().BeNull();
-            await categoryRepository.DidNotReceive().GetByIdAsync(Arg.Any<CategoryId>(), Arg.Any<CancellationToken>());
+            await categoryRepository.DidNotReceive().GetByIdAsync(Owner, Arg.Any<CategoryId>(), Arg.Any<CancellationToken>());
             await transactionRepository.Received(1).UpdateAsync(transaction, Arg.Any<CancellationToken>());
         }
 
@@ -92,7 +92,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.CategorizeTransactio
 
             var categoryRepository = Substitute.For<ICategoryRepository>();
             categoryRepository
-                .GetByIdAsync(Arg.Any<CategoryId>(), Arg.Any<CancellationToken>())
+                .GetByIdAsync(Owner, Arg.Any<CategoryId>(), Arg.Any<CancellationToken>())
                 .Returns((Category?)null);
 
             var handler = new CategorizeTransactionCommandHandler(transactionRepository, categoryRepository);

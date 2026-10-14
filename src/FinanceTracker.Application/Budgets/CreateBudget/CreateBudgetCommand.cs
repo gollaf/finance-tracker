@@ -10,6 +10,7 @@ namespace FinanceTracker.Application.Budgets.CreateBudget
     /// Account, so there's nothing to derive it from.
     /// </summary>
     public sealed record CreateBudgetCommand(
+        UserId OwnerId,
         CategoryId CategoryId,
         int Year,
         int Month,

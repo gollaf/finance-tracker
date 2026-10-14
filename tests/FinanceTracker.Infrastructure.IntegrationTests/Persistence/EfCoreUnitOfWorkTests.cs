@@ -48,7 +48,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence
                 {
                     await new AccountRepository(context).AddAsync(
                         Account.Create(Owner, "Checking", AccountType.Checking, "USD"), cancellationToken);
-                    await new CategoryRepository(context).AddAsync(Category.Create("Groceries"), cancellationToken);
+                    await new CategoryRepository(context).AddAsync(Category.Create(Owner, "Groceries"), cancellationToken);
                     return true;
                 });
             }

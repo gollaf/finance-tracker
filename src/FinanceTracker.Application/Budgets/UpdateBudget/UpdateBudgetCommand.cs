@@ -11,5 +11,5 @@ namespace FinanceTracker.Application.Budgets.UpdateBudget
     /// LimitAmount, same reasoning as UpdateTransaction deriving currency
     /// from the Transaction it's editing.
     /// </summary>
-    public sealed record UpdateBudgetCommand(BudgetId BudgetId, decimal LimitAmount) : IRequest<Result>;
+    public sealed record UpdateBudgetCommand(UserId OwnerId, BudgetId BudgetId, decimal LimitAmount) : IRequest<Result>;
 }

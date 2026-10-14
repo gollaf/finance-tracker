@@ -7,7 +7,7 @@ using MediatR;
 namespace FinanceTracker.Application.Budgets.GetBudgetStatus
 {
     /// <summary>
-    /// Sums spending across every Account that has Transactions in the
+    /// Sums spending across every Account of the owner that has Transactions in the
     /// Budget's Category — a Budget isn't scoped to one Account, so its
     /// status can't be either. See ITransactionRepository.GetByCategoryIdAsync.
     /// </summary>
@@ -25,7 +25,7 @@ namespace FinanceTracker.Application.Budgets.GetBudgetStatus
 
         public async Task<Result<BudgetStatusDto>> Handle(GetBudgetStatusQuery request, CancellationToken cancellationToken)
         {
-            var budget = await _budgetRepository.GetByIdAsync(request.BudgetId, cancellationToken);
+            var budget = await _budgetRepository.GetByIdAsync(request.OwnerId, request.BudgetId, cancellationToken);
 
             if (budget is null)
             {
@@ -33,7 +33,8 @@ namespace FinanceTracker.Application.Budgets.GetBudgetStatus
                     "Budget.NotFound", $"No budget found with id '{request.BudgetId}'."));
             }
 
-            var transactions = await _transactionRepository.GetByCategoryIdAsync(budget.CategoryId, cancellationToken);
+            var transactions = await _transactionRepository.GetByCategoryIdAsync(
+                request.OwnerId, budget.CategoryId, cancellationToken);
 
             var actualSpending = transactions
                 .Where(t => t.Type == TransactionType.Expense)

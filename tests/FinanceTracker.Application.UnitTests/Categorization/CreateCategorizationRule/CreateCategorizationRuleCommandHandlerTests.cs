@@ -12,13 +12,15 @@ namespace FinanceTracker.Application.UnitTests.Categorization.CreateCategorizati
 {
     public class CreateCategorizationRuleCommandHandlerTests
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
+
         [Fact]
         public async Task Handle_WithValidCommand_CreatesRuleAndSaves()
         {
-            var category = Category.Create("Groceries");
+            var category = Category.Create(Owner, "Groceries");
 
             var categoryRepository = Substitute.For<ICategoryRepository>();
-            categoryRepository.GetByIdAsync(category.Id, Arg.Any<CancellationToken>()).Returns(category);
+            categoryRepository.GetByIdAsync(Owner, category.Id, Arg.Any<CancellationToken>()).Returns(category);
 
             CategorizationRule? savedRule = null;
             var ruleRepository = Substitute.For<ICategorizationRuleRepository>();
@@ -27,12 +29,13 @@ namespace FinanceTracker.Application.UnitTests.Categorization.CreateCategorizati
                 .Returns(Task.CompletedTask);
 
             var handler = new CreateCategorizationRuleCommandHandler(categoryRepository, ruleRepository);
-            var command = new CreateCategorizationRuleCommand("walmart", category.Id, 1);
+            var command = new CreateCategorizationRuleCommand(Owner, "walmart", category.Id, 1);
 
             var result = await handler.Handle(command, CancellationToken.None);
 
             result.IsSuccess.Should().BeTrue();
             result.Value.Should().Be(savedRule!.Id);
+            savedRule.OwnerId.Should().Be(Owner);
             savedRule.Pattern.Should().Be("walmart");
             savedRule.CategoryId.Should().Be(category.Id);
             savedRule.Priority.Should().Be(1);
@@ -43,13 +46,13 @@ namespace FinanceTracker.Application.UnitTests.Categorization.CreateCategorizati
         {
             var categoryRepository = Substitute.For<ICategoryRepository>();
             categoryRepository
-                .GetByIdAsync(Arg.Any<CategoryId>(), Arg.Any<CancellationToken>())
+                .GetByIdAsync(Owner, Arg.Any<CategoryId>(), Arg.Any<CancellationToken>())
                 .Returns((Category?)null);
 
             var ruleRepository = Substitute.For<ICategorizationRuleRepository>();
 
             var handler = new CreateCategorizationRuleCommandHandler(categoryRepository, ruleRepository);
-            var command = new CreateCategorizationRuleCommand("walmart", CategoryId.New(), 1);
+            var command = new CreateCategorizationRuleCommand(Owner, "walmart", CategoryId.New(), 1);
 
             var result = await handler.Handle(command, CancellationToken.None);
 

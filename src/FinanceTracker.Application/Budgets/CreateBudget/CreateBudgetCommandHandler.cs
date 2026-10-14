@@ -24,7 +24,8 @@ namespace FinanceTracker.Application.Budgets.CreateBudget
 
         public async Task<Result<BudgetId>> Handle(CreateBudgetCommand request, CancellationToken cancellationToken)
         {
-            var category = await _categoryRepository.GetByIdAsync(request.CategoryId, cancellationToken);
+            var category = await _categoryRepository.GetByIdAsync(
+                request.OwnerId, request.CategoryId, cancellationToken);
 
             if (category is null)
             {
@@ -35,7 +36,7 @@ namespace FinanceTracker.Application.Budgets.CreateBudget
             var period = BudgetPeriod.Create(request.Year, request.Month);
 
             var existingBudget = await _budgetRepository.GetByCategoryAndPeriodAsync(
-                request.CategoryId, period, cancellationToken);
+                request.OwnerId, request.CategoryId, period, cancellationToken);
 
             if (existingBudget is not null)
             {
@@ -45,7 +46,7 @@ namespace FinanceTracker.Application.Budgets.CreateBudget
             }
 
             var limit = Money.Create(request.LimitAmount, request.Currency);
-            var budget = Budget.Create(request.CategoryId, period, limit);
+            var budget = Budget.Create(request.OwnerId, request.CategoryId, period, limit);
 
             await _budgetRepository.AddAsync(budget, cancellationToken);
 

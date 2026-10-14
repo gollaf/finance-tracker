@@ -65,6 +65,9 @@ namespace FinanceTracker.Infrastructure.Migrations
                     b.Property<Guid>("CategoryId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid");
+
                     b.ComplexProperty(typeof(Dictionary<string, object>), "LimitAmount", "FinanceTracker.Domain.Budgets.Budget.LimitAmount#Money", b1 =>
                         {
                             b1.IsRequired();
@@ -98,6 +101,8 @@ namespace FinanceTracker.Infrastructure.Migrations
 
                     b.HasIndex("CategoryId");
 
+                    b.HasIndex("OwnerId");
+
                     b.ToTable("Budgets", (string)null);
                 });
 
@@ -110,10 +115,15 @@ namespace FinanceTracker.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("ParentCategoryId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("OwnerId");
 
                     b.HasIndex("ParentCategoryId");
 
@@ -128,6 +138,9 @@ namespace FinanceTracker.Infrastructure.Migrations
                     b.Property<Guid>("CategoryId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Pattern")
                         .IsRequired()
                         .HasColumnType("text");
@@ -138,6 +151,8 @@ namespace FinanceTracker.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CategoryId");
+
+                    b.HasIndex("OwnerId");
 
                     b.ToTable("CategorizationRules", (string)null);
                 });

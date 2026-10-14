@@ -43,7 +43,7 @@ namespace FinanceTracker.Application.Transactions.SuggestCategory
             if (transaction.CategoryId is not null)
                 return Result.Success(CategorySuggestionOutcome.AlreadyCategorized);
 
-            var categories = await _categoryRepository.GetAllAsync(cancellationToken);
+            var categories = await _categoryRepository.GetAllAsync(request.OwnerId, cancellationToken);
 
             if (categories.Count == 0)
                 return Result.Success(CategorySuggestionOutcome.NoCategoriesDefined);

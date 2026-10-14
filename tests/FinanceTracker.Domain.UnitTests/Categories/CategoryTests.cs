@@ -6,10 +6,12 @@ namespace FinanceTracker.Domain.UnitTests.Categories
 {
     public class CategoryTests
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
+
         [Fact]
         public void Create_WithValidName_Succeeds()
         {
-            var category = Category.Create("Groceries");
+            var category = Category.Create(Owner, "Groceries");
 
             category.Name.Should().Be("Groceries");
             category.ParentCategoryId.Should().BeNull();
@@ -21,7 +23,7 @@ namespace FinanceTracker.Domain.UnitTests.Categories
         [InlineData("   ")]
         public void Create_WithMissingName_Throws(string? name)
         {
-            var act = () => Category.Create(name!);
+            var act = () => Category.Create(Owner, name!);
 
             act.Should().Throw<ArgumentException>();
         }
@@ -31,7 +33,7 @@ namespace FinanceTracker.Domain.UnitTests.Categories
         {
             var parentId = CategoryId.New();
 
-            var category = Category.Create("Dining Out", parentId);
+            var category = Category.Create(Owner, "Dining Out", parentId);
 
             category.ParentCategoryId.Should().Be(parentId);
         }
@@ -39,7 +41,7 @@ namespace FinanceTracker.Domain.UnitTests.Categories
         [Fact]
         public void Rename_WithValidName_UpdatesName()
         {
-            var category = Category.Create("Groceries");
+            var category = Category.Create(Owner, "Groceries");
 
             category.Rename("Food");
 
@@ -51,7 +53,7 @@ namespace FinanceTracker.Domain.UnitTests.Categories
         [InlineData("")]
         public void Rename_WithMissingName_Throws(string? name)
         {
-            var category = Category.Create("Groceries");
+            var category = Category.Create(Owner, "Groceries");
 
             var act = () => category.Rename(name!);
 
@@ -61,7 +63,7 @@ namespace FinanceTracker.Domain.UnitTests.Categories
         [Fact]
         public void Reparent_ToItself_Throws()
         {
-            var category = Category.Create("Groceries");
+            var category = Category.Create(Owner, "Groceries");
 
             var act = () => category.Reparent(category.Id);
 
@@ -71,7 +73,7 @@ namespace FinanceTracker.Domain.UnitTests.Categories
         [Fact]
         public void Reparent_ToAnotherCategory_UpdatesParent()
         {
-            var category = Category.Create("Dining Out");
+            var category = Category.Create(Owner, "Dining Out");
             var newParentId = CategoryId.New();
 
             category.Reparent(newParentId);
@@ -82,11 +84,27 @@ namespace FinanceTracker.Domain.UnitTests.Categories
         [Fact]
         public void Reparent_ToNull_ClearsParent()
         {
-            var category = Category.Create("Dining Out", CategoryId.New());
+            var category = Category.Create(Owner, "Dining Out", CategoryId.New());
 
             category.Reparent(null);
 
             category.ParentCategoryId.Should().BeNull();
+        }
+
+        [Fact]
+        public void Create_StoresTheOwner()
+        {
+            var category = Category.Create(Owner, "Groceries");
+
+            category.OwnerId.Should().Be(Owner);
+        }
+
+        [Fact]
+        public void Create_WithoutOwner_Throws()
+        {
+            var act = () => Category.Create(default, "Groceries");
+
+            act.Should().Throw<ArgumentException>();
         }
     }
 }

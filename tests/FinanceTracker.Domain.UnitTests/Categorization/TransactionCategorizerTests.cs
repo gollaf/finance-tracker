@@ -6,11 +6,13 @@ namespace FinanceTracker.Domain.UnitTests.Categorization
 {
     public class TransactionCategorizerTests
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
+
         [Fact]
         public void Categorize_WithMatchingRule_ReturnsItsCategoryId()
         {
             var coffeeCategoryId = CategoryId.New();
-            var rules = new[] { CategorizationRule.Create("starbucks", coffeeCategoryId, priority: 1) };
+            var rules = new[] { CategorizationRule.Create(Owner, "starbucks", coffeeCategoryId, priority: 1) };
 
             var result = TransactionCategorizer.Categorize("Starbucks Coffee #4521", rules);
 
@@ -20,7 +22,7 @@ namespace FinanceTracker.Domain.UnitTests.Categorization
         [Fact]
         public void Categorize_WithNoMatchingRule_ReturnsNull()
         {
-            var rules = new[] { CategorizationRule.Create("starbucks", CategoryId.New(), priority: 1) };
+            var rules = new[] { CategorizationRule.Create(Owner, "starbucks", CategoryId.New(), priority: 1) };
 
             var result = TransactionCategorizer.Categorize("Trader Joe's", rules);
 
@@ -34,8 +36,8 @@ namespace FinanceTracker.Domain.UnitTests.Categorization
             var highPriorityCategoryId = CategoryId.New();
             var rules = new[]
             {
-                CategorizationRule.Create("coffee", lowPriorityCategoryId, priority: 5),
-                CategorizationRule.Create("starbucks", highPriorityCategoryId, priority: 1),
+                CategorizationRule.Create(Owner, "coffee", lowPriorityCategoryId, priority: 5),
+                CategorizationRule.Create(Owner, "starbucks", highPriorityCategoryId, priority: 1),
             };
 
             var result = TransactionCategorizer.Categorize("Starbucks Coffee #4521", rules);

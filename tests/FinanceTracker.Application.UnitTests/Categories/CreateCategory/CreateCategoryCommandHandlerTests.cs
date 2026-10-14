@@ -10,11 +10,13 @@ namespace FinanceTracker.Application.UnitTests.Categories.CreateCategory
 {
     public class CreateCategoryCommandHandlerTests
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
+
         [Fact]
         public async Task Handle_WithUniqueNameAndNoParent_CreatesCategoryAndSaves()
         {
             var categoryRepository = Substitute.For<ICategoryRepository>();
-            categoryRepository.ExistsWithNameAsync("Groceries", Arg.Any<CancellationToken>()).Returns(false);
+            categoryRepository.ExistsWithNameAsync(Owner, "Groceries", Arg.Any<CancellationToken>()).Returns(false);
 
             Category? savedCategory = null;
             categoryRepository
@@ -22,12 +24,13 @@ namespace FinanceTracker.Application.UnitTests.Categories.CreateCategory
                 .Returns(Task.CompletedTask);
 
             var handler = new CreateCategoryCommandHandler(categoryRepository);
-            var command = new CreateCategoryCommand("Groceries");
+            var command = new CreateCategoryCommand(Owner, "Groceries");
 
             var result = await handler.Handle(command, CancellationToken.None);
 
             result.IsSuccess.Should().BeTrue();
             result.Value.Should().Be(savedCategory!.Id);
+            savedCategory.OwnerId.Should().Be(Owner);
             savedCategory.Name.Should().Be("Groceries");
             savedCategory.ParentCategoryId.Should().BeNull();
         }
@@ -36,10 +39,10 @@ namespace FinanceTracker.Application.UnitTests.Categories.CreateCategory
         public async Task Handle_WithDuplicateName_ReturnsConflict()
         {
             var categoryRepository = Substitute.For<ICategoryRepository>();
-            categoryRepository.ExistsWithNameAsync("Groceries", Arg.Any<CancellationToken>()).Returns(true);
+            categoryRepository.ExistsWithNameAsync(Owner, "Groceries", Arg.Any<CancellationToken>()).Returns(true);
 
             var handler = new CreateCategoryCommandHandler(categoryRepository);
-            var command = new CreateCategoryCommand("Groceries");
+            var command = new CreateCategoryCommand(Owner, "Groceries");
 
             var result = await handler.Handle(command, CancellationToken.None);
 
@@ -51,11 +54,11 @@ namespace FinanceTracker.Application.UnitTests.Categories.CreateCategory
         [Fact]
         public async Task Handle_WithValidParent_CreatesChildCategory()
         {
-            var parent = Category.Create("Food");
+            var parent = Category.Create(Owner, "Food");
 
             var categoryRepository = Substitute.For<ICategoryRepository>();
-            categoryRepository.ExistsWithNameAsync("Groceries", Arg.Any<CancellationToken>()).Returns(false);
-            categoryRepository.GetByIdAsync(parent.Id, Arg.Any<CancellationToken>()).Returns(parent);
+            categoryRepository.ExistsWithNameAsync(Owner, "Groceries", Arg.Any<CancellationToken>()).Returns(false);
+            categoryRepository.GetByIdAsync(Owner, parent.Id, Arg.Any<CancellationToken>()).Returns(parent);
 
             Category? savedCategory = null;
             categoryRepository
@@ -63,7 +66,7 @@ namespace FinanceTracker.Application.UnitTests.Categories.CreateCategory
                 .Returns(Task.CompletedTask);
 
             var handler = new CreateCategoryCommandHandler(categoryRepository);
-            var command = new CreateCategoryCommand("Groceries", parent.Id);
+            var command = new CreateCategoryCommand(Owner, "Groceries", parent.Id);
 
             var result = await handler.Handle(command, CancellationToken.None);
 
@@ -75,13 +78,13 @@ namespace FinanceTracker.Application.UnitTests.Categories.CreateCategory
         public async Task Handle_WithUnknownParent_ReturnsNotFound()
         {
             var categoryRepository = Substitute.For<ICategoryRepository>();
-            categoryRepository.ExistsWithNameAsync("Groceries", Arg.Any<CancellationToken>()).Returns(false);
+            categoryRepository.ExistsWithNameAsync(Owner, "Groceries", Arg.Any<CancellationToken>()).Returns(false);
             categoryRepository
-                .GetByIdAsync(Arg.Any<CategoryId>(), Arg.Any<CancellationToken>())
+                .GetByIdAsync(Owner, Arg.Any<CategoryId>(), Arg.Any<CancellationToken>())
                 .Returns((Category?)null);
 
             var handler = new CreateCategoryCommandHandler(categoryRepository);
-            var command = new CreateCategoryCommand("Groceries", CategoryId.New());
+            var command = new CreateCategoryCommand(Owner, "Groceries", CategoryId.New());
 
             var result = await handler.Handle(command, CancellationToken.None);
 

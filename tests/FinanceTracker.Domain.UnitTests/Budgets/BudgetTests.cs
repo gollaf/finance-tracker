@@ -6,6 +6,8 @@ namespace FinanceTracker.Domain.UnitTests.Budgets
 {
     public class BudgetTests
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
+
         [Fact]
         public void Create_WithValidData_Succeeds()
         {
@@ -13,7 +15,7 @@ namespace FinanceTracker.Domain.UnitTests.Budgets
             var period = BudgetPeriod.Create(2026, 8);
             var limit = Money.Create(400m, "USD");
 
-            var budget = Budget.Create(categoryId, period, limit);
+            var budget = Budget.Create(Owner, categoryId, period, limit);
 
             budget.CategoryId.Should().Be(categoryId);
             budget.Period.Should().Be(period);
@@ -23,7 +25,7 @@ namespace FinanceTracker.Domain.UnitTests.Budgets
         [Fact]
         public void Create_WithZeroLimit_Throws()
         {
-            var act = () => Budget.Create(CategoryId.New(), BudgetPeriod.Create(2026, 8), Money.Create(0m, "USD"));
+            var act = () => Budget.Create(Owner, CategoryId.New(), BudgetPeriod.Create(2026, 8), Money.Create(0m, "USD"));
 
             act.Should().Throw<ArgumentException>();
         }
@@ -31,7 +33,7 @@ namespace FinanceTracker.Domain.UnitTests.Budgets
         [Fact]
         public void Create_WithNegativeLimit_Throws()
         {
-            var act = () => Budget.Create(CategoryId.New(), BudgetPeriod.Create(2026, 8), Money.Create(-10m, "USD"));
+            var act = () => Budget.Create(Owner, CategoryId.New(), BudgetPeriod.Create(2026, 8), Money.Create(-10m, "USD"));
 
             act.Should().Throw<ArgumentException>();
         }
@@ -39,7 +41,7 @@ namespace FinanceTracker.Domain.UnitTests.Budgets
         [Fact]
         public void UpdateLimit_WithValidAmount_UpdatesLimit()
         {
-            var budget = Budget.Create(CategoryId.New(), BudgetPeriod.Create(2026, 8), Money.Create(400m, "USD"));
+            var budget = Budget.Create(Owner, CategoryId.New(), BudgetPeriod.Create(2026, 8), Money.Create(400m, "USD"));
 
             budget.UpdateLimit(Money.Create(500m, "USD"));
 
@@ -49,9 +51,25 @@ namespace FinanceTracker.Domain.UnitTests.Budgets
         [Fact]
         public void UpdateLimit_WithZero_Throws()
         {
-            var budget = Budget.Create(CategoryId.New(), BudgetPeriod.Create(2026, 8), Money.Create(400m, "USD"));
+            var budget = Budget.Create(Owner, CategoryId.New(), BudgetPeriod.Create(2026, 8), Money.Create(400m, "USD"));
 
             var act = () => budget.UpdateLimit(Money.Create(0m, "USD"));
+
+            act.Should().Throw<ArgumentException>();
+        }
+
+        [Fact]
+        public void Create_StoresTheOwner()
+        {
+            var budget = Budget.Create(Owner, CategoryId.New(), BudgetPeriod.Create(2026, 8), Money.Create(400m, "USD"));
+
+            budget.OwnerId.Should().Be(Owner);
+        }
+
+        [Fact]
+        public void Create_WithoutOwner_Throws()
+        {
+            var act = () => Budget.Create(default, CategoryId.New(), BudgetPeriod.Create(2026, 8), Money.Create(400m, "USD"));
 
             act.Should().Throw<ArgumentException>();
         }

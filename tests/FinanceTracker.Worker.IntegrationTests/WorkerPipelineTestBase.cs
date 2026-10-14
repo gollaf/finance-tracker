@@ -162,11 +162,14 @@ namespace FinanceTracker.Worker.IntegrationTests
             return transaction?.CategoryId;
         }
 
-        protected async Task<IReadOnlyList<Transaction>> LoadTransactionsAsync(AccountId accountId)
+        protected Task<IReadOnlyList<Transaction>> LoadTransactionsAsync(AccountId accountId) =>
+            LoadTransactionsAsync(Owner, accountId);
+
+        protected async Task<IReadOnlyList<Transaction>> LoadTransactionsAsync(UserId ownerId, AccountId accountId)
         {
             await using var scope = _host.Services.CreateAsyncScope();
             return await scope.ServiceProvider.GetRequiredService<ITransactionRepository>()
-                .GetByAccountIdAsync(Owner, accountId);
+                .GetByAccountIdAsync(ownerId, accountId);
         }
 
         /// <summary>Polls until the Transaction has a Category, or the timeout passes.</summary>

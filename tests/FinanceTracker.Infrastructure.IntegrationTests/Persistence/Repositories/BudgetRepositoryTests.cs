@@ -11,6 +11,8 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
 {
     public sealed class BudgetRepositoryTests : IAsyncLifetime
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
+        private static readonly UserId Stranger = new(Guid.NewGuid());
         private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
             .Build();
 
@@ -41,7 +43,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         // Budget.CategoryId is a foreign key, so the Category must exist.
         private async Task<CategoryId> CreatePersistedCategoryAsync(string name = "Food")
         {
-            var category = Category.Create(name);
+            var category = Category.Create(Owner, name);
             await _categoryRepository.AddAsync(category, CancellationToken.None);
             return category.Id;
         }
@@ -52,13 +54,14 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
             var categoryId = await CreatePersistedCategoryAsync();
             var period = BudgetPeriod.Create(2026, 9);
             var limit = Money.Create(500m, "USD");
-            var budget = Budget.Create(categoryId, period, limit);
+            var budget = Budget.Create(Owner, categoryId, period, limit);
 
             await _repository.AddAsync(budget, CancellationToken.None);
-            var loaded = await _repository.GetByIdAsync(budget.Id, CancellationToken.None);
+            var loaded = await _repository.GetByIdAsync(Owner, budget.Id, CancellationToken.None);
 
             loaded.Should().NotBeNull();
             loaded!.Id.Should().Be(budget.Id);
+            loaded.OwnerId.Should().Be(Owner);
             loaded.CategoryId.Should().Be(categoryId);
             loaded.Period.Should().Be(period);
             loaded.LimitAmount.Should().Be(limit);
@@ -67,7 +70,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         [Fact]
         public async Task GetByIdAsync_WithUnknownId_ReturnsNull()
         {
-            var loaded = await _repository.GetByIdAsync(BudgetId.New(), CancellationToken.None);
+            var loaded = await _repository.GetByIdAsync(Owner, BudgetId.New(), CancellationToken.None);
 
             loaded.Should().BeNull();
         }
@@ -77,10 +80,10 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         {
             var categoryId = await CreatePersistedCategoryAsync();
             var period = BudgetPeriod.Create(2026, 9);
-            var budget = Budget.Create(categoryId, period, Money.Create(500m, "USD"));
+            var budget = Budget.Create(Owner, categoryId, period, Money.Create(500m, "USD"));
             await _repository.AddAsync(budget, CancellationToken.None);
 
-            var loaded = await _repository.GetByCategoryAndPeriodAsync(categoryId, period, CancellationToken.None);
+            var loaded = await _repository.GetByCategoryAndPeriodAsync(Owner, categoryId, period, CancellationToken.None);
 
             loaded.Should().NotBeNull();
             loaded!.Id.Should().Be(budget.Id);
@@ -90,11 +93,11 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         public async Task GetByCategoryAndPeriodAsync_WithDifferentPeriod_ReturnsNull()
         {
             var categoryId = await CreatePersistedCategoryAsync();
-            var budget = Budget.Create(categoryId, BudgetPeriod.Create(2026, 9), Money.Create(500m, "USD"));
+            var budget = Budget.Create(Owner, categoryId, BudgetPeriod.Create(2026, 9), Money.Create(500m, "USD"));
             await _repository.AddAsync(budget, CancellationToken.None);
 
             var loaded = await _repository.GetByCategoryAndPeriodAsync(
-                categoryId, BudgetPeriod.Create(2026, 10), CancellationToken.None);
+                Owner, categoryId, BudgetPeriod.Create(2026, 10), CancellationToken.None);
 
             loaded.Should().BeNull();
         }
@@ -103,15 +106,39 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         public async Task UpdateAsync_PersistsChangedLimit()
         {
             var categoryId = await CreatePersistedCategoryAsync();
-            var budget = Budget.Create(categoryId, BudgetPeriod.Create(2026, 9), Money.Create(500m, "USD"));
+            var budget = Budget.Create(Owner, categoryId, BudgetPeriod.Create(2026, 9), Money.Create(500m, "USD"));
             await _repository.AddAsync(budget, CancellationToken.None);
 
             budget.UpdateLimit(Money.Create(750m, "USD"));
             await _repository.UpdateAsync(budget, CancellationToken.None);
 
-            var loaded = await _repository.GetByIdAsync(budget.Id, CancellationToken.None);
+            var loaded = await _repository.GetByIdAsync(Owner, budget.Id, CancellationToken.None);
 
             loaded!.LimitAmount.Should().Be(Money.Create(750m, "USD"));
+        }
+
+        [Fact]
+        public async Task GetByIdAsync_ForAnotherOwner_ReturnsNull()
+        {
+            var categoryId = await CreatePersistedCategoryAsync();
+            var budget = Budget.Create(Owner, categoryId, BudgetPeriod.Create(2026, 9), Money.Create(500m, "USD"));
+            await _repository.AddAsync(budget, CancellationToken.None);
+
+            var loaded = await _repository.GetByIdAsync(Stranger, budget.Id, CancellationToken.None);
+
+            loaded.Should().BeNull();
+        }
+
+        [Fact]
+        public async Task GetByCategoryAndPeriodAsync_ForAnotherOwner_ReturnsNull()
+        {
+            var categoryId = await CreatePersistedCategoryAsync();
+            var period = BudgetPeriod.Create(2026, 9);
+            await _repository.AddAsync(Budget.Create(Owner, categoryId, period, Money.Create(500m, "USD")), CancellationToken.None);
+
+            var loaded = await _repository.GetByCategoryAndPeriodAsync(Stranger, categoryId, period, CancellationToken.None);
+
+            loaded.Should().BeNull();
         }
     }
 }

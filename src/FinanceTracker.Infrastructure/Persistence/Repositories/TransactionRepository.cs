@@ -24,9 +24,9 @@ namespace FinanceTracker.Infrastructure.Persistence.Repositories
                 .ToListAsync(cancellationToken);
 
         public async Task<IReadOnlyList<Transaction>> GetByCategoryIdAsync(
-            CategoryId categoryId, CancellationToken cancellationToken = default) =>
+            UserId ownerId, CategoryId categoryId, CancellationToken cancellationToken = default) =>
             await _context.Transactions
-                .Where(t => t.CategoryId == categoryId)
+                .Where(t => t.CategoryId == categoryId && t.OwnerId == ownerId)
                 .ToListAsync(cancellationToken);
 
         public async Task AddAsync(Transaction transaction, CancellationToken cancellationToken = default)

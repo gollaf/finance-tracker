@@ -6,12 +6,14 @@ namespace FinanceTracker.Domain.UnitTests.Categorization
 {
     public class CategorizationRuleTests
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
+
         [Fact]
         public void Create_WithValidPattern_Succeeds()
         {
             var categoryId = CategoryId.New();
 
-            var rule = CategorizationRule.Create("starbucks", categoryId, priority: 1);
+            var rule = CategorizationRule.Create(Owner, "starbucks", categoryId, priority: 1);
 
             rule.Pattern.Should().Be("starbucks");
             rule.CategoryId.Should().Be(categoryId);
@@ -24,7 +26,7 @@ namespace FinanceTracker.Domain.UnitTests.Categorization
         [InlineData("   ")]
         public void Create_WithMissingPattern_Throws(string? pattern)
         {
-            var act = () => CategorizationRule.Create(pattern!, CategoryId.New(), priority: 1);
+            var act = () => CategorizationRule.Create(Owner, pattern!, CategoryId.New(), priority: 1);
 
             act.Should().Throw<ArgumentException>();
         }
@@ -36,7 +38,7 @@ namespace FinanceTracker.Domain.UnitTests.Categorization
         [InlineData("Trader Joe's", false)]
         public void Matches_IsCaseInsensitiveSubstringMatch(string description, bool expected)
         {
-            var rule = CategorizationRule.Create("starbucks", CategoryId.New(), priority: 1);
+            var rule = CategorizationRule.Create(Owner, "starbucks", CategoryId.New(), priority: 1);
 
             rule.Matches(description).Should().Be(expected);
         }
@@ -44,7 +46,7 @@ namespace FinanceTracker.Domain.UnitTests.Categorization
         [Fact]
         public void UpdatePattern_WithValidPattern_UpdatesPattern()
         {
-            var rule = CategorizationRule.Create("starbucks", CategoryId.New(), priority: 1);
+            var rule = CategorizationRule.Create(Owner, "starbucks", CategoryId.New(), priority: 1);
 
             rule.UpdatePattern("coffee");
 
@@ -54,11 +56,27 @@ namespace FinanceTracker.Domain.UnitTests.Categorization
         [Fact]
         public void UpdatePriority_UpdatesPriority()
         {
-            var rule = CategorizationRule.Create("starbucks", CategoryId.New(), priority: 1);
+            var rule = CategorizationRule.Create(Owner, "starbucks", CategoryId.New(), priority: 1);
 
             rule.UpdatePriority(5);
 
             rule.Priority.Should().Be(5);
+        }
+
+        [Fact]
+        public void Create_StoresTheOwner()
+        {
+            var rule = CategorizationRule.Create(Owner, "starbucks", CategoryId.New(), priority: 1);
+
+            rule.OwnerId.Should().Be(Owner);
+        }
+
+        [Fact]
+        public void Create_WithoutOwner_Throws()
+        {
+            var act = () => CategorizationRule.Create(default, "starbucks", CategoryId.New(), priority: 1);
+
+            act.Should().Throw<ArgumentException>();
         }
     }
 }
