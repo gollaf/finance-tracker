@@ -235,6 +235,27 @@ migration, first run `kubectl delete job migrate -n finance-tracker
 
 </details>
 
+## Running on a server
+
+The always-on demo runs on an Oracle Cloud Always Free virtual machine (Arm,
+Ubuntu, Docker Engine) from [`deploy/server/compose.yaml`](./deploy/server/compose.yaml)
+and the images CI publishes
+([ADR 0025](./docs/adr/0025-single-server-deployment-with-docker-compose.md)):
+
+```
+server (one VM)
+  postgres, rabbitmq              no ports outside the server
+  migrate                         runs once per deploy, then exits
+  api        127.0.0.1:5000       Production, API docs on
+  worker                          outbox relay + consumers in one process
+```
+
+The server needs only that file and a `.env` made from
+[`env.example`](./deploy/server/env.example), which pins the version
+(`IMAGE_TAG=sha-<commit>`) and holds the passwords. Nothing is reachable from
+the internet yet; it is used through an SSH tunnel until authentication is in
+place.
+
 ## Roadmap
 
 Done: domain and use cases, persistence and API, Docker, AI insights,
@@ -256,9 +277,12 @@ The phase-by-phase plan is in [`PROJECT_PLAN.md`](./PROJECT_PLAN.md).
 
 - **No authentication yet.** Every endpoint is open; this is fine on a local
   machine and is the first thing to add before a public deployment.
-- **Local-development configuration.** docker compose and the Kubernetes
-  manifests run in the Development environment (API docs and exception
-  details enabled) with local-only credentials.
+- **Local-development configuration.** The root docker compose file and the
+  Kubernetes manifests run in the Development environment (API docs and
+  exception details enabled) with local-only credentials; only the server
+  deployment runs in Production.
+- **Not public yet.** The server deployment is reachable only through an SSH
+  tunnel until the API has authentication.
 - **One outbox relay at a time.** This is enforced by deployment
   configuration, not code; running several would need row locking
   (`FOR UPDATE SKIP LOCKED`).
@@ -291,6 +315,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0022 — CI pipeline and container image publishing](./docs/adr/0022-ci-pipeline-and-image-publishing.md)
 - [0023 — Production environment and the API docs setting](./docs/adr/0023-production-environment-and-api-docs-setting.md)
 - [0024 — Multi-architecture images by cross-compiling](./docs/adr/0024-multi-architecture-images.md)
+- [0025 — Single-server deployment with docker compose](./docs/adr/0025-single-server-deployment-with-docker-compose.md)
 
 ## License
 

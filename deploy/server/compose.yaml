@@ -1,0 +1,102 @@
+# The whole system on one server, from the images CI publishes to ghcr.io.
+# See docs/adr/0025-single-server-deployment-with-docker-compose.md.
+#
+# Lives on the server next to a .env file made from env.example; nothing else
+# from the repository is needed there. Run from that folder:
+#   docker compose pull && docker compose up -d
+
+name: finance-tracker
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: financetracker
+      POSTGRES_USER: postgres
+      # Only read when the data volume is empty, on the very first start.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    # No ports: only the containers on this compose network need the database.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d financetracker"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    restart: unless-stopped
+    # The data directory is named after the hostname; a fixed one keeps the
+    # volume's data across recreated containers.
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: financetracker
+      # Like POSTGRES_PASSWORD: only applied to an empty data volume.
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    ports:
+      # Management UI, reachable only from the server itself (an SSH tunnel).
+      - "127.0.0.1:15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Applies pending migrations, then exits (ADR 0017). The Api and Worker
+  # start only after it has succeeded.
+  migrate:
+    image: ghcr.io/gollaf/finance-tracker-api:${IMAGE_TAG:?Set IMAGE_TAG in .env}
+    restart: "no"
+    command: ["migrate"]
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__FinanceTracker: "Host=postgres;Port=5432;Database=financetracker;Username=postgres;Password=${POSTGRES_PASSWORD}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    image: ghcr.io/gollaf/finance-tracker-api:${IMAGE_TAG:?Set IMAGE_TAG in .env}
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # Production hides exception details; the docs stay on for reviewers (ADR 0023).
+      ApiDocs__Enabled: "true"
+      Database__ApplyMigrationsOnStartup: "false"
+      ConnectionStrings__FinanceTracker: "Host=postgres;Port=5432;Database=financetracker;Username=postgres;Password=${POSTGRES_PASSWORD}"
+      Groq__ApiKey: ${GROQ_API_KEY:-}
+    ports:
+      # 127.0.0.1 only: the Api has no authentication yet, so it must not be
+      # reachable from the internet. Docker's published ports bypass the
+      # server's own firewall rules, so this binding is the real protection.
+      - "127.0.0.1:5000:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # Both Worker roles in one process, so exactly one outbox relay runs (ADR 0018).
+  worker:
+    image: ghcr.io/gollaf/finance-tracker-worker:${IMAGE_TAG:?Set IMAGE_TAG in .env}
+    restart: unless-stopped
+    environment:
+      DOTNET_ENVIRONMENT: Production
+      ConnectionStrings__FinanceTracker: "Host=postgres;Port=5432;Database=financetracker;Username=postgres;Password=${POSTGRES_PASSWORD}"
+      RabbitMq__Host: rabbitmq
+      RabbitMq__UserName: financetracker
+      RabbitMq__Password: ${RABBITMQ_PASSWORD}
+      Groq__ApiKey: ${GROQ_API_KEY:-}
+    # Longer than the .NET host's 30-second shutdown timeout (ADR 0021).
+    stop_grace_period: 45s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  rabbitmq-data:
