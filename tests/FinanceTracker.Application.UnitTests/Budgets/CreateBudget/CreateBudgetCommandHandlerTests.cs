@@ -12,17 +12,19 @@ namespace FinanceTracker.Application.UnitTests.Budgets.CreateBudget
 {
     public class CreateBudgetCommandHandlerTests
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
+
         [Fact]
         public async Task Handle_WithValidCommand_CreatesBudgetAndSaves()
         {
-            var category = Category.Create("Groceries", parentCategoryId: null);
+            var category = Category.Create(Owner, "Groceries", parentCategoryId: null);
 
             var categoryRepository = Substitute.For<ICategoryRepository>();
-            categoryRepository.GetByIdAsync(category.Id, Arg.Any<CancellationToken>()).Returns(category);
+            categoryRepository.GetByIdAsync(Owner, category.Id, Arg.Any<CancellationToken>()).Returns(category);
 
             var budgetRepository = Substitute.For<IBudgetRepository>();
             budgetRepository
-                .GetByCategoryAndPeriodAsync(category.Id, Arg.Any<BudgetPeriod>(), Arg.Any<CancellationToken>())
+                .GetByCategoryAndPeriodAsync(Owner, category.Id, Arg.Any<BudgetPeriod>(), Arg.Any<CancellationToken>())
                 .Returns((Budget?)null);
 
             Budget? savedBudget = null;
@@ -31,12 +33,13 @@ namespace FinanceTracker.Application.UnitTests.Budgets.CreateBudget
                 .Returns(Task.CompletedTask);
 
             var handler = new CreateBudgetCommandHandler(categoryRepository, budgetRepository);
-            var command = new CreateBudgetCommand(category.Id, 2026, 8, 500m, "USD");
+            var command = new CreateBudgetCommand(Owner, category.Id, 2026, 8, 500m, "USD");
 
             var result = await handler.Handle(command, CancellationToken.None);
 
             result.IsSuccess.Should().BeTrue();
             result.Value.Should().Be(savedBudget!.Id);
+            savedBudget.OwnerId.Should().Be(Owner);
             savedBudget.CategoryId.Should().Be(category.Id);
             savedBudget.Period.Should().Be(BudgetPeriod.Create(2026, 8));
             savedBudget.LimitAmount.Should().Be(Money.Create(500m, "USD"));
@@ -47,13 +50,13 @@ namespace FinanceTracker.Application.UnitTests.Budgets.CreateBudget
         {
             var categoryRepository = Substitute.For<ICategoryRepository>();
             categoryRepository
-                .GetByIdAsync(Arg.Any<CategoryId>(), Arg.Any<CancellationToken>())
+                .GetByIdAsync(Owner, Arg.Any<CategoryId>(), Arg.Any<CancellationToken>())
                 .Returns((Category?)null);
 
             var budgetRepository = Substitute.For<IBudgetRepository>();
 
             var handler = new CreateBudgetCommandHandler(categoryRepository, budgetRepository);
-            var command = new CreateBudgetCommand(CategoryId.New(), 2026, 8, 500m, "USD");
+            var command = new CreateBudgetCommand(Owner, CategoryId.New(), 2026, 8, 500m, "USD");
 
             var result = await handler.Handle(command, CancellationToken.None);
 
@@ -65,20 +68,20 @@ namespace FinanceTracker.Application.UnitTests.Budgets.CreateBudget
         [Fact]
         public async Task Handle_WithExistingBudgetForCategoryAndPeriod_ReturnsConflict()
         {
-            var category = Category.Create("Groceries", parentCategoryId: null);
+            var category = Category.Create(Owner, "Groceries", parentCategoryId: null);
             var period = BudgetPeriod.Create(2026, 8);
-            var existingBudget = Budget.Create(category.Id, period, Money.Create(300m, "USD"));
+            var existingBudget = Budget.Create(Owner, category.Id, period, Money.Create(300m, "USD"));
 
             var categoryRepository = Substitute.For<ICategoryRepository>();
-            categoryRepository.GetByIdAsync(category.Id, Arg.Any<CancellationToken>()).Returns(category);
+            categoryRepository.GetByIdAsync(Owner, category.Id, Arg.Any<CancellationToken>()).Returns(category);
 
             var budgetRepository = Substitute.For<IBudgetRepository>();
             budgetRepository
-                .GetByCategoryAndPeriodAsync(category.Id, period, Arg.Any<CancellationToken>())
+                .GetByCategoryAndPeriodAsync(Owner, category.Id, period, Arg.Any<CancellationToken>())
                 .Returns(existingBudget);
 
             var handler = new CreateBudgetCommandHandler(categoryRepository, budgetRepository);
-            var command = new CreateBudgetCommand(category.Id, 2026, 8, 500m, "USD");
+            var command = new CreateBudgetCommand(Owner, category.Id, 2026, 8, 500m, "USD");
 
             var result = await handler.Handle(command, CancellationToken.None);
 

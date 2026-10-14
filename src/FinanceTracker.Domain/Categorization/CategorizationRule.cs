@@ -10,6 +10,8 @@ namespace FinanceTracker.Domain.Categorization
     {
         public CategorizationRuleId Id { get; }
 
+        public UserId OwnerId { get; }
+
         public string Pattern { get; private set; }
 
         public CategoryId CategoryId { get; }
@@ -17,18 +19,23 @@ namespace FinanceTracker.Domain.Categorization
         /// <summary>Lower value is matched first when several rules match.</summary>
         public int Priority { get; private set; }
 
-        private CategorizationRule(CategorizationRuleId id, string pattern, CategoryId categoryId, int priority)
+        private CategorizationRule(
+            CategorizationRuleId id, UserId ownerId, string pattern, CategoryId categoryId, int priority)
         {
             Id = id;
+            OwnerId = ownerId;
             Pattern = pattern;
             CategoryId = categoryId;
             Priority = priority;
         }
 
-        public static CategorizationRule Create(string pattern, CategoryId categoryId, int priority)
+        public static CategorizationRule Create(UserId ownerId, string pattern, CategoryId categoryId, int priority)
         {
+            if (ownerId == default)
+                throw new ArgumentException("A categorization rule must have an owner.", nameof(ownerId));
+
             ValidatePattern(pattern);
-            return new CategorizationRule(CategorizationRuleId.New(), pattern.Trim(), categoryId, priority);
+            return new CategorizationRule(CategorizationRuleId.New(), ownerId, pattern.Trim(), categoryId, priority);
         }
 
         /// <summary>Case-insensitive substring match against a Transaction description.</summary>

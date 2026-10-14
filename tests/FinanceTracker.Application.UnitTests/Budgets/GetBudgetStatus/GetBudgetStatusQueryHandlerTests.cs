@@ -19,7 +19,7 @@ namespace FinanceTracker.Application.UnitTests.Budgets.GetBudgetStatus
         {
             var categoryId = CategoryId.New();
             var period = BudgetPeriod.Create(2026, 6);
-            var budget = Budget.Create(categoryId, period, Money.Create(200m, "USD"));
+            var budget = Budget.Create(Owner, categoryId, period, Money.Create(200m, "USD"));
 
             var transactions = new[]
             {
@@ -38,15 +38,15 @@ namespace FinanceTracker.Application.UnitTests.Budgets.GetBudgetStatus
             };
 
             var budgetRepository = Substitute.For<IBudgetRepository>();
-            budgetRepository.GetByIdAsync(budget.Id, Arg.Any<CancellationToken>()).Returns(budget);
+            budgetRepository.GetByIdAsync(Owner, budget.Id, Arg.Any<CancellationToken>()).Returns(budget);
 
             var transactionRepository = Substitute.For<ITransactionRepository>();
             transactionRepository
-                .GetByCategoryIdAsync(categoryId, Arg.Any<CancellationToken>())
+                .GetByCategoryIdAsync(Owner, categoryId, Arg.Any<CancellationToken>())
                 .Returns(transactions);
 
             var handler = new GetBudgetStatusQueryHandler(budgetRepository, transactionRepository);
-            var query = new GetBudgetStatusQuery(budget.Id);
+            var query = new GetBudgetStatusQuery(Owner, budget.Id);
 
             var result = await handler.Handle(query, CancellationToken.None);
 
@@ -61,7 +61,7 @@ namespace FinanceTracker.Application.UnitTests.Budgets.GetBudgetStatus
         {
             var categoryId = CategoryId.New();
             var period = BudgetPeriod.Create(2026, 6);
-            var budget = Budget.Create(categoryId, period, Money.Create(100m, "USD"));
+            var budget = Budget.Create(Owner, categoryId, period, Money.Create(100m, "USD"));
 
             var transactions = new[]
             {
@@ -71,15 +71,15 @@ namespace FinanceTracker.Application.UnitTests.Budgets.GetBudgetStatus
             };
 
             var budgetRepository = Substitute.For<IBudgetRepository>();
-            budgetRepository.GetByIdAsync(budget.Id, Arg.Any<CancellationToken>()).Returns(budget);
+            budgetRepository.GetByIdAsync(Owner, budget.Id, Arg.Any<CancellationToken>()).Returns(budget);
 
             var transactionRepository = Substitute.For<ITransactionRepository>();
             transactionRepository
-                .GetByCategoryIdAsync(categoryId, Arg.Any<CancellationToken>())
+                .GetByCategoryIdAsync(Owner, categoryId, Arg.Any<CancellationToken>())
                 .Returns(transactions);
 
             var handler = new GetBudgetStatusQueryHandler(budgetRepository, transactionRepository);
-            var query = new GetBudgetStatusQuery(budget.Id);
+            var query = new GetBudgetStatusQuery(Owner, budget.Id);
 
             var result = await handler.Handle(query, CancellationToken.None);
 
@@ -93,12 +93,12 @@ namespace FinanceTracker.Application.UnitTests.Budgets.GetBudgetStatus
         public async Task Handle_WithUnknownBudget_ReturnsNotFound()
         {
             var budgetRepository = Substitute.For<IBudgetRepository>();
-            budgetRepository.GetByIdAsync(Arg.Any<BudgetId>(), Arg.Any<CancellationToken>()).Returns((Budget?)null);
+            budgetRepository.GetByIdAsync(Owner, Arg.Any<BudgetId>(), Arg.Any<CancellationToken>()).Returns((Budget?)null);
 
             var transactionRepository = Substitute.For<ITransactionRepository>();
 
             var handler = new GetBudgetStatusQueryHandler(budgetRepository, transactionRepository);
-            var query = new GetBudgetStatusQuery(BudgetId.New());
+            var query = new GetBudgetStatusQuery(Owner, BudgetId.New());
 
             var result = await handler.Handle(query, CancellationToken.None);
 

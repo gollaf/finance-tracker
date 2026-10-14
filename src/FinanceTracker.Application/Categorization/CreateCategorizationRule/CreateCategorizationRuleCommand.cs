@@ -4,6 +4,7 @@ using MediatR;
 
 namespace FinanceTracker.Application.Categorization.CreateCategorizationRule
 {
-    public sealed record CreateCategorizationRuleCommand(string Pattern, CategoryId CategoryId, int Priority)
+    public sealed record CreateCategorizationRuleCommand(
+        UserId OwnerId, string Pattern, CategoryId CategoryId, int Priority)
         : IRequest<Result<CategorizationRuleId>>;
 }

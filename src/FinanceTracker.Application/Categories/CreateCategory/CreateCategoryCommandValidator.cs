@@ -11,6 +11,10 @@ namespace FinanceTracker.Application.Categories.CreateCategory
     {
         public CreateCategoryCommandValidator()
         {
+            RuleFor(c => c.OwnerId)
+                .NotEqual(default(UserId))
+                .WithMessage("OwnerId is required.");
+
             RuleFor(c => c.Name)
                 .NotEmpty();
 

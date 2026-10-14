@@ -23,7 +23,12 @@ namespace FinanceTracker.Api.Budgets
         public async Task<IActionResult> Create(CreateBudgetRequest request, CancellationToken cancellationToken)
         {
             var command = new CreateBudgetCommand(
-                new CategoryId(request.CategoryId), request.Year, request.Month, request.LimitAmount, request.Currency);
+                User.GetUserId(),
+                new CategoryId(request.CategoryId),
+                request.Year,
+                request.Month,
+                request.LimitAmount,
+                request.Currency);
             var result = await _sender.Send(command, cancellationToken);
 
             if (result.IsFailure)
@@ -38,7 +43,7 @@ namespace FinanceTracker.Api.Budgets
         [HttpPut("{id:guid}")]
         public async Task<IActionResult> Update(Guid id, UpdateBudgetRequest request, CancellationToken cancellationToken)
         {
-            var command = new UpdateBudgetCommand(new BudgetId(id), request.LimitAmount);
+            var command = new UpdateBudgetCommand(User.GetUserId(), new BudgetId(id), request.LimitAmount);
             var result = await _sender.Send(command, cancellationToken);
 
             if (result.IsFailure)
@@ -50,7 +55,7 @@ namespace FinanceTracker.Api.Budgets
         [HttpGet("{id:guid}/status")]
         public async Task<IActionResult> GetStatus(Guid id, CancellationToken cancellationToken)
         {
-            var query = new GetBudgetStatusQuery(new BudgetId(id));
+            var query = new GetBudgetStatusQuery(User.GetUserId(), new BudgetId(id));
             var result = await _sender.Send(query, cancellationToken);
 
             if (result.IsFailure)

@@ -82,7 +82,7 @@ namespace FinanceTracker.Application.Imports.ProcessImport
                 return Result.Success(ProcessImportJobOutcome.Failed);
             }
 
-            var rules = await _categorizationRuleRepository.GetAllAsync(cancellationToken);
+            var rules = await _categorizationRuleRepository.GetAllAsync(ownerId, cancellationToken);
             var rowErrors = new List<ImportJobRowError>();
             var importedCount = 0;
 

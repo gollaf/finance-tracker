@@ -11,15 +11,18 @@ namespace FinanceTracker.Domain.Budgets
     {
         public BudgetId Id { get; }
 
+        public UserId OwnerId { get; }
+
         public CategoryId CategoryId { get; }
 
         public BudgetPeriod Period { get; private set; }
 
         public Money LimitAmount { get; private set; }
 
-        private Budget(BudgetId id, CategoryId categoryId, BudgetPeriod period, Money limitAmount)
+        private Budget(BudgetId id, UserId ownerId, CategoryId categoryId, BudgetPeriod period, Money limitAmount)
         {
             Id = id;
+            OwnerId = ownerId;
             CategoryId = categoryId;
             Period = period;
             LimitAmount = limitAmount;
@@ -28,18 +31,22 @@ namespace FinanceTracker.Domain.Budgets
         // For EF Core only: Period and LimitAmount are complex properties,
         // which EF Core cannot bind through a constructor, so it needs one
         // without them and sets them afterwards.
-        private Budget(BudgetId id, CategoryId categoryId)
+        private Budget(BudgetId id, UserId ownerId, CategoryId categoryId)
         {
             Id = id;
+            OwnerId = ownerId;
             CategoryId = categoryId;
             Period = null!;
             LimitAmount = null!;
         }
 
-        public static Budget Create(CategoryId categoryId, BudgetPeriod period, Money limitAmount)
+        public static Budget Create(UserId ownerId, CategoryId categoryId, BudgetPeriod period, Money limitAmount)
         {
+            if (ownerId == default)
+                throw new ArgumentException("A budget must have an owner.", nameof(ownerId));
+
             ValidateLimit(limitAmount);
-            return new Budget(BudgetId.New(), categoryId, period, limitAmount);
+            return new Budget(BudgetId.New(), ownerId, categoryId, period, limitAmount);
         }
 
         public void UpdateLimit(Money limitAmount)

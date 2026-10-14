@@ -46,7 +46,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.GetSpendingInsights
 
             foreach (var (id, name) in categories)
             {
-                repository.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(Category.Create(name));
+                repository.GetByIdAsync(Owner, id, Arg.Any<CancellationToken>()).Returns(Category.Create(Owner, name));
             }
 
             return repository;
@@ -218,7 +218,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.GetSpendingInsights
 
             await categoryRepository
                 .DidNotReceive()
-                .GetByIdAsync(Arg.Any<CategoryId>(), Arg.Any<CancellationToken>());
+                .GetByIdAsync(Owner, Arg.Any<CategoryId>(), Arg.Any<CancellationToken>());
         }
 
         [Fact]

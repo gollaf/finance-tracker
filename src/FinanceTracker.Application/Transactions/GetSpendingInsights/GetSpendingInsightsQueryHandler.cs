@@ -85,7 +85,7 @@ namespace FinanceTracker.Application.Transactions.GetSpendingInsights
 
             foreach (var categoryId in categoryIds)
             {
-                var categoryName = await ResolveCategoryNameAsync(categoryId, cancellationToken);
+                var categoryName = await ResolveCategoryNameAsync(request.OwnerId, categoryId, cancellationToken);
 
                 var currentTotal = TotalFor(categoryId, currentMonthByCategory, currency);
                 var priorTotal = TotalFor(categoryId, priorWindowByCategory, currency);
@@ -142,12 +142,13 @@ namespace FinanceTracker.Application.Transactions.GetSpendingInsights
             return Money.Zero(currency);
         }
 
-        private async Task<string> ResolveCategoryNameAsync(CategoryId? categoryId, CancellationToken cancellationToken)
+        private async Task<string> ResolveCategoryNameAsync(
+            UserId ownerId, CategoryId? categoryId, CancellationToken cancellationToken)
         {
             if (categoryId is null)
                 return "Uncategorized";
 
-            var category = await _categoryRepository.GetByIdAsync(categoryId.Value, cancellationToken);
+            var category = await _categoryRepository.GetByIdAsync(ownerId, categoryId.Value, cancellationToken);
 
             // Defensive only: a Restrict foreign key stops a Category that a
             // Transaction references from being deleted.

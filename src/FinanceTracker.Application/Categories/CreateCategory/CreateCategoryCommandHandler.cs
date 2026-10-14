@@ -16,7 +16,8 @@ namespace FinanceTracker.Application.Categories.CreateCategory
 
         public async Task<Result<CategoryId>> Handle(CreateCategoryCommand request, CancellationToken cancellationToken)
         {
-            var nameExists = await _categoryRepository.ExistsWithNameAsync(request.Name, cancellationToken);
+            var nameExists = await _categoryRepository.ExistsWithNameAsync(
+                request.OwnerId, request.Name, cancellationToken);
 
             if (nameExists)
             {
@@ -26,7 +27,8 @@ namespace FinanceTracker.Application.Categories.CreateCategory
 
             if (request.ParentCategoryId is { } parentCategoryId)
             {
-                var parent = await _categoryRepository.GetByIdAsync(parentCategoryId, cancellationToken);
+                var parent = await _categoryRepository.GetByIdAsync(
+                    request.OwnerId, parentCategoryId, cancellationToken);
 
                 if (parent is null)
                 {
@@ -35,7 +37,7 @@ namespace FinanceTracker.Application.Categories.CreateCategory
                 }
             }
 
-            var category = Category.Create(request.Name, request.ParentCategoryId);
+            var category = Category.Create(request.OwnerId, request.Name, request.ParentCategoryId);
 
             await _categoryRepository.AddAsync(category, cancellationToken);
 

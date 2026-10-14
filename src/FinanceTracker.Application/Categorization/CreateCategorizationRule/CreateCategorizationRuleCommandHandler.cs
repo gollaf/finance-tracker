@@ -22,7 +22,8 @@ namespace FinanceTracker.Application.Categorization.CreateCategorizationRule
         public async Task<Result<CategorizationRuleId>> Handle(
             CreateCategorizationRuleCommand request, CancellationToken cancellationToken)
         {
-            var category = await _categoryRepository.GetByIdAsync(request.CategoryId, cancellationToken);
+            var category = await _categoryRepository.GetByIdAsync(
+                request.OwnerId, request.CategoryId, cancellationToken);
 
             if (category is null)
             {
@@ -30,7 +31,7 @@ namespace FinanceTracker.Application.Categorization.CreateCategorizationRule
                     "Category.NotFound", $"No category found with id '{request.CategoryId}'."));
             }
 
-            var rule = CategorizationRule.Create(request.Pattern, request.CategoryId, request.Priority);
+            var rule = CategorizationRule.Create(request.OwnerId, request.Pattern, request.CategoryId, request.Priority);
 
             await _categorizationRuleRepository.AddAsync(rule, cancellationToken);
 

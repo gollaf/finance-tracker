@@ -14,15 +14,17 @@ namespace FinanceTracker.Infrastructure.Persistence.Repositories
             _context = context;
         }
 
-        public Task<Budget?> GetByIdAsync(BudgetId id, CancellationToken cancellationToken = default) =>
-            _context.Budgets.SingleOrDefaultAsync(b => b.Id == id, cancellationToken);
+        public Task<Budget?> GetByIdAsync(
+            UserId ownerId, BudgetId id, CancellationToken cancellationToken = default) =>
+            _context.Budgets.SingleOrDefaultAsync(b => b.Id == id && b.OwnerId == ownerId, cancellationToken);
 
         // Field by field, not `b.Period == period`: EF Core can't reliably
         // translate a complex property's equality operator to SQL.
         public Task<Budget?> GetByCategoryAndPeriodAsync(
-            CategoryId categoryId, BudgetPeriod period, CancellationToken cancellationToken = default) =>
+            UserId ownerId, CategoryId categoryId, BudgetPeriod period, CancellationToken cancellationToken = default) =>
             _context.Budgets.SingleOrDefaultAsync(
-                b => b.CategoryId == categoryId
+                b => b.OwnerId == ownerId
+                    && b.CategoryId == categoryId
                     && b.Period.Year == period.Year
                     && b.Period.Month == period.Month,
                 cancellationToken);

@@ -21,7 +21,7 @@ namespace FinanceTracker.Api.CategorizationRules
         public async Task<IActionResult> Create(CreateCategorizationRuleRequest request, CancellationToken cancellationToken)
         {
             var command = new CreateCategorizationRuleCommand(
-                request.Pattern, new CategoryId(request.CategoryId), request.Priority);
+                User.GetUserId(), request.Pattern, new CategoryId(request.CategoryId), request.Priority);
             var result = await _sender.Send(command, cancellationToken);
 
             if (result.IsFailure)

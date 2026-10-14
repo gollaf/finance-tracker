@@ -33,7 +33,7 @@ namespace FinanceTracker.Application.UnitTests.Imports.ProcessImport
         public ProcessImportJobCommandHandlerTests()
         {
             _accountRepository.GetByIdAsync(Owner, _account.Id, Arg.Any<CancellationToken>()).Returns(_account);
-            _ruleRepository.GetAllAsync(Arg.Any<CancellationToken>()).Returns(Array.Empty<CategorizationRule>());
+            _ruleRepository.GetAllAsync(Owner, Arg.Any<CancellationToken>()).Returns(Array.Empty<CategorizationRule>());
         }
 
         private ProcessImportJobCommandHandler NewHandler() =>
@@ -111,8 +111,8 @@ namespace FinanceTracker.Application.UnitTests.Imports.ProcessImport
         public async Task Handle_AppliesCategorizationRules()
         {
             var categoryId = CategoryId.New();
-            _ruleRepository.GetAllAsync(Arg.Any<CancellationToken>())
-                .Returns(new[] { CategorizationRule.Create("coffee", categoryId, priority: 1) });
+            _ruleRepository.GetAllAsync(Owner, Arg.Any<CancellationToken>())
+                .Returns(new[] { CategorizationRule.Create(Owner, "coffee", categoryId, priority: 1) });
 
             Transaction? saved = null;
             _transactionRepository.AddAsync(Arg.Do<Transaction>(t => saved = t), Arg.Any<CancellationToken>());

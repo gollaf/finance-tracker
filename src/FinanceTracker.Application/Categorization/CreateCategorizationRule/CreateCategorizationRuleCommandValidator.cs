@@ -12,6 +12,10 @@ namespace FinanceTracker.Application.Categorization.CreateCategorizationRule
     {
         public CreateCategorizationRuleCommandValidator()
         {
+            RuleFor(c => c.OwnerId)
+                .NotEqual(default(UserId))
+                .WithMessage("OwnerId is required.");
+
             RuleFor(c => c.Pattern)
                 .NotEmpty();
 

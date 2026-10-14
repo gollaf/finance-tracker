@@ -22,6 +22,13 @@ namespace FinanceTracker.Infrastructure.Persistence.Configurations
                 .HasConversion(new StronglyTypedIdValueConverter<CategoryId>(id => id.Value, value => new CategoryId(value)))
                 .ValueGeneratedNever();
 
+            builder.Property(c => c.OwnerId)
+                .HasConversion(new StronglyTypedIdValueConverter<UserId>(id => id.Value, value => new UserId(value)))
+                .IsRequired();
+
+            // Every lookup filters on the owner.
+            builder.HasIndex(c => c.OwnerId);
+
             // No max length: the Domain has no length rule for Category.Name.
             builder.Property(c => c.Name)
                 .IsRequired();

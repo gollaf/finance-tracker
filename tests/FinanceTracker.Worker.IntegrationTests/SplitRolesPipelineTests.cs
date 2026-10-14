@@ -30,7 +30,7 @@ namespace FinanceTracker.Worker.IntegrationTests
         public async Task EventPublishedWhileNoConsumerRuns_IsHandledOnceAConsumerOnlyWorkerStarts()
         {
             var accountId = await SendAsync(new CreateAccountCommand(Owner, "Checking", AccountType.Checking, "USD"));
-            var transportId = await SendAsync(new CreateCategoryCommand("Transport"));
+            var transportId = await SendAsync(new CreateCategoryCommand(Owner, "Transport"));
 
             var transactionId = await SendAsync(
                 new AddTransactionCommand(Owner, accountId, 18m, TransactionType.Expense, "UBER *TRIP", Today));

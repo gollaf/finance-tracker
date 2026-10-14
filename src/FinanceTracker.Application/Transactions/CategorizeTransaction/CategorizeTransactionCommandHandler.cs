@@ -34,7 +34,7 @@ namespace FinanceTracker.Application.Transactions.CategorizeTransaction
 
             if (request.CategoryId is { } categoryId)
             {
-                var category = await _categoryRepository.GetByIdAsync(categoryId, cancellationToken);
+                var category = await _categoryRepository.GetByIdAsync(request.OwnerId, categoryId, cancellationToken);
 
                 if (category is null)
                 {

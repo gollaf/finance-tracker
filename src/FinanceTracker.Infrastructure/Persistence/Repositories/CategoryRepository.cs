@@ -14,14 +14,19 @@ namespace FinanceTracker.Infrastructure.Persistence.Repositories
             _context = context;
         }
 
-        public Task<Category?> GetByIdAsync(CategoryId id, CancellationToken cancellationToken = default) =>
-            _context.Categories.SingleOrDefaultAsync(c => c.Id == id, cancellationToken);
+        public Task<Category?> GetByIdAsync(
+            UserId ownerId, CategoryId id, CancellationToken cancellationToken = default) =>
+            _context.Categories.SingleOrDefaultAsync(c => c.Id == id && c.OwnerId == ownerId, cancellationToken);
 
-        public Task<bool> ExistsWithNameAsync(string name, CancellationToken cancellationToken = default) =>
-            _context.Categories.AnyAsync(c => EF.Functions.ILike(c.Name, name), cancellationToken);
+        public Task<bool> ExistsWithNameAsync(
+            UserId ownerId, string name, CancellationToken cancellationToken = default) =>
+            _context.Categories.AnyAsync(
+                c => c.OwnerId == ownerId && EF.Functions.ILike(c.Name, name), cancellationToken);
 
-        public async Task<IReadOnlyList<Category>> GetAllAsync(CancellationToken cancellationToken = default) =>
+        public async Task<IReadOnlyList<Category>> GetAllAsync(
+            UserId ownerId, CancellationToken cancellationToken = default) =>
             await _context.Categories
+                .Where(c => c.OwnerId == ownerId)
                 .OrderBy(c => c.Name)
                 .ToListAsync(cancellationToken);
 

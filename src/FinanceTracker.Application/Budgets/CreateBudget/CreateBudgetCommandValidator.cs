@@ -7,6 +7,10 @@ namespace FinanceTracker.Application.Budgets.CreateBudget
     {
         public CreateBudgetCommandValidator()
         {
+            RuleFor(c => c.OwnerId)
+                .NotEqual(default(UserId))
+                .WithMessage("OwnerId is required.");
+
             RuleFor(c => c.CategoryId)
                 .NotEqual(default(CategoryId))
                 .WithMessage("CategoryId is required.");

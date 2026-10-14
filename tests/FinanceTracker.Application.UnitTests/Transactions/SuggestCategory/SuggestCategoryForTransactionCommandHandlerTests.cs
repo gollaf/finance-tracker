@@ -19,8 +19,8 @@ namespace FinanceTracker.Application.UnitTests.Transactions.SuggestCategory
         private readonly ICategoryRepository _categoryRepository = Substitute.For<ICategoryRepository>();
         private readonly ICategorySuggester _categorySuggester = Substitute.For<ICategorySuggester>();
 
-        private readonly Category _groceries = Category.Create("Groceries");
-        private readonly Category _transport = Category.Create("Transport");
+        private readonly Category _groceries = Category.Create(Owner, "Groceries");
+        private readonly Category _transport = Category.Create(Owner, "Transport");
 
         private SuggestCategoryForTransactionCommandHandler NewHandler() =>
             new(_transactionRepository, _categoryRepository, _categorySuggester);
@@ -37,7 +37,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.SuggestCategory
         private void GivenCategories(params Category[] categories)
         {
             IReadOnlyList<Category> list = categories;
-            _categoryRepository.GetAllAsync(Arg.Any<CancellationToken>()).Returns(list);
+            _categoryRepository.GetAllAsync(Owner, Arg.Any<CancellationToken>()).Returns(list);
         }
 
         private void GivenSuggestion(Result<CategoryId?> suggestion) =>

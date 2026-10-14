@@ -11,6 +11,8 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
 {
     public sealed class CategorizationRuleRepositoryTests : IAsyncLifetime
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
+        private static readonly UserId Stranger = new(Guid.NewGuid());
         private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
             .Build();
 
@@ -41,7 +43,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         // CategorizationRule.CategoryId is a foreign key, so the Category must exist.
         private async Task<CategoryId> CreatePersistedCategoryAsync(string name = "Food")
         {
-            var category = Category.Create(name);
+            var category = Category.Create(Owner, name);
             await _categoryRepository.AddAsync(category, CancellationToken.None);
             return category.Id;
         }
@@ -50,14 +52,15 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         public async Task AddAsync_ThenGetAllAsync_RoundTripsAllFields()
         {
             var categoryId = await CreatePersistedCategoryAsync();
-            var rule = CategorizationRule.Create("starbucks", categoryId, priority: 1);
+            var rule = CategorizationRule.Create(Owner, "starbucks", categoryId, priority: 1);
 
             await _repository.AddAsync(rule, CancellationToken.None);
-            var rules = await _repository.GetAllAsync(CancellationToken.None);
+            var rules = await _repository.GetAllAsync(Owner, CancellationToken.None);
 
             rules.Should().ContainSingle();
             var loaded = rules[0];
             loaded.Id.Should().Be(rule.Id);
+            loaded.OwnerId.Should().Be(Owner);
             loaded.Pattern.Should().Be("starbucks");
             loaded.CategoryId.Should().Be(categoryId);
             loaded.Priority.Should().Be(1);
@@ -68,11 +71,11 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         {
             var categoryId = await CreatePersistedCategoryAsync();
 
-            await _repository.AddAsync(CategorizationRule.Create("starbucks", categoryId, 1), CancellationToken.None);
-            await _repository.AddAsync(CategorizationRule.Create("uber", categoryId, 2), CancellationToken.None);
-            await _repository.AddAsync(CategorizationRule.Create("netflix", categoryId, 3), CancellationToken.None);
+            await _repository.AddAsync(CategorizationRule.Create(Owner, "starbucks", categoryId, 1), CancellationToken.None);
+            await _repository.AddAsync(CategorizationRule.Create(Owner, "uber", categoryId, 2), CancellationToken.None);
+            await _repository.AddAsync(CategorizationRule.Create(Owner, "netflix", categoryId, 3), CancellationToken.None);
 
-            var rules = await _repository.GetAllAsync(CancellationToken.None);
+            var rules = await _repository.GetAllAsync(Owner, CancellationToken.None);
 
             rules.Should().HaveCount(3);
         }
@@ -80,9 +83,26 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         [Fact]
         public async Task GetAllAsync_WithNoRules_ReturnsEmpty()
         {
-            var rules = await _repository.GetAllAsync(CancellationToken.None);
+            var rules = await _repository.GetAllAsync(Owner, CancellationToken.None);
 
             rules.Should().BeEmpty();
+        }
+
+        [Fact]
+        public async Task GetAllAsync_ReturnsOnlyTheOwnersRules()
+        {
+            var ownersCategoryId = await CreatePersistedCategoryAsync();
+            var strangersCategory = Category.Create(Stranger, "Food");
+            await _categoryRepository.AddAsync(strangersCategory, CancellationToken.None);
+
+            var ownersRule = CategorizationRule.Create(Owner, "starbucks", ownersCategoryId, 1);
+            await _repository.AddAsync(ownersRule, CancellationToken.None);
+            await _repository.AddAsync(
+                CategorizationRule.Create(Stranger, "starbucks", strangersCategory.Id, 1), CancellationToken.None);
+
+            var rules = await _repository.GetAllAsync(Owner, CancellationToken.None);
+
+            rules.Select(r => r.Id).Should().Equal(ownersRule.Id);
         }
     }
 }

@@ -1,5 +1,6 @@
 using FinanceTracker.Application.Categorization;
 using FinanceTracker.Domain.Categorization;
+using FinanceTracker.Domain.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace FinanceTracker.Infrastructure.Persistence.Repositories
@@ -14,8 +15,11 @@ namespace FinanceTracker.Infrastructure.Persistence.Repositories
         }
 
         // Unordered: TransactionCategorizer sorts by Priority itself.
-        public async Task<IReadOnlyList<CategorizationRule>> GetAllAsync(CancellationToken cancellationToken = default) =>
-            await _context.CategorizationRules.ToListAsync(cancellationToken);
+        public async Task<IReadOnlyList<CategorizationRule>> GetAllAsync(
+            UserId ownerId, CancellationToken cancellationToken = default) =>
+            await _context.CategorizationRules
+                .Where(r => r.OwnerId == ownerId)
+                .ToListAsync(cancellationToken);
 
         public async Task AddAsync(CategorizationRule rule, CancellationToken cancellationToken = default)
         {
