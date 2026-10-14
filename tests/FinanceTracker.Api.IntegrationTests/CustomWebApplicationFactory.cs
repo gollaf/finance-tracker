@@ -60,6 +60,15 @@ namespace FinanceTracker.Api.IntegrationTests
             return client;
         }
 
+        /// <summary>A client signed in as a brand-new user, for checks across users.</summary>
+        public async Task<HttpClient> CreateClientForNewUserAsync()
+        {
+            var client = CreateAnonymousClient();
+            var token = await RegisterAndLogInAsync(client, $"{Guid.NewGuid():N}@example.com", TestUserPassword);
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            return client;
+        }
+
         /// <summary>Registers a user through /api/auth and returns their access token.</summary>
         public static async Task<string> RegisterAndLogInAsync(HttpClient client, string email, string password)
         {
