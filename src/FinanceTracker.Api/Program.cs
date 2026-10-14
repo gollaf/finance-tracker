@@ -1,9 +1,12 @@
 using FinanceTracker.Api.HealthChecks;
+using FinanceTracker.Api.OpenApi;
 using FinanceTracker.Application;
 using FinanceTracker.Infrastructure;
 using FinanceTracker.Infrastructure.Persistence;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 using System.Text.Json.Serialization;
@@ -20,7 +23,7 @@ builder.Services.AddControllers().AddJsonOptions(options =>
     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
 
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecuritySchemeTransformer>());
 
 // Unhandled exceptions become a 500 ProblemDetails; exception details are
 // included in Development only.
@@ -41,6 +44,17 @@ builder.Services.AddProblemDetails(options =>
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<FinanceTrackerDbContext>("database", tags: ["ready"])
     .AddCheck<PendingMigrationsHealthCheck>("migrations", tags: ["ready"]);
+
+// Users and sign-in tokens. The tokens are encrypted with Data
+// Protection keys, which by default live inside the container: a redeploy
+// would invalidate every token, and a second instance couldn't read the
+// first one's. Keeping the keys in the database avoids both.
+builder.Services.AddIdentityApiEndpoints<IdentityUser<Guid>>()
+    .AddEntityFrameworkStores<FinanceTrackerDbContext>();
+
+builder.Services.AddDataProtection()
+    .SetApplicationName("FinanceTracker")
+    .PersistKeysToDbContext<FinanceTrackerDbContext>();
 
 var app = builder.Build();
 
@@ -65,6 +79,9 @@ if (app.Configuration.GetValue("Database:ApplyMigrationsOnStartup", defaultValue
 
 app.UseExceptionHandler();
 
+app.UseAuthentication();
+app.UseAuthorization();
+
 // API docs default to Development only. A public demo can turn them on with
 // ApiDocs__Enabled=true: they describe the endpoints, nothing secret.
 if (app.Configuration.GetValue("ApiDocs:Enabled", defaultValue: app.Environment.IsDevelopment()))
@@ -85,7 +102,15 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
     Predicate = check => check.Tags.Contains("ready")
 });
 
-app.MapControllers();
+app.MapGroup("/api/auth")
+    .WithTags("Auth")
+    .MapIdentityApi<IdentityUser<Guid>>();
+
+// Sign-in is required per endpoint group, not with a global fallback policy:
+// MapIdentityApi's /login and /register carry no AllowAnonymous, so a
+// fallback policy would lock callers out of signing in at all. Health checks
+// and the API docs stay open.
+app.MapControllers().RequireAuthorization();
 
 app.Run();
 

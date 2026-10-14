@@ -26,6 +26,14 @@ namespace FinanceTracker.Api.IntegrationTests.OpenApi
         }
 
         [Fact]
+        public async Task OpenApiDocument_DeclaresTheBearerTokenScheme()
+        {
+            var document = await _client.GetStringAsync("/openapi/v1.json");
+
+            document.Should().Contain("\"securitySchemes\"").And.Contain("\"bearer\"");
+        }
+
+        [Fact]
         public async Task ScalarUi_Returns200WithHtmlContent()
         {
             var response = await _client.GetAsync("/scalar/v1");

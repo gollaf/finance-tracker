@@ -73,7 +73,7 @@ jobs:
 
   # Builds both images on every run, catching Dockerfile breakage the tests
   # can't see. Only master runs push them to ghcr.io (ADR 0022). Each image is
-  # built for amd64 and arm64 by cross-compiling (ADR 0024), so no QEMU setup.
+  # built for amd64 and arm64 by cross-compiling, so no QEMU setup.
   docker-image:
     name: docker-image (${{ matrix.image }})
     needs: build-and-test
