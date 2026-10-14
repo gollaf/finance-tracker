@@ -1,7 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# Multi-stage build, cross-compiled for amd64 and arm64: see
-# docs/adr/0024-multi-architecture-images.md.
+# Multi-stage build: see docs/adr/0007-dockerfile-multistage-build-and-base-images.md.
 
 # ---- Stage 1: runtime base (no SDK) ------------------------------------------
 # This stage and the final one are the target architecture. They must not RUN
