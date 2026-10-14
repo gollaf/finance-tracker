@@ -105,7 +105,10 @@ letter, a lower-case letter, a digit and a symbol), and enter the returned
 `accessToken` as the bearer token in Scalar's authentication settings.
 Each user sees only their own accounts, transactions, categories, rules
 and budgets; anyone else's answer 404
-([ADR 0027](./docs/adr/0027-per-user-data-ownership.md)).
+([ADR 0027](./docs/adr/0027-per-user-data-ownership.md)). Requests are
+rate limited per client address -- 100 per minute in general, and 10 per 5
+minutes to `/api/auth` -- and a request over the limit gets `429 Too Many
+Requests` ([ADR 0028](./docs/adr/0028-rate-limiting-and-forwarded-headers.md)).
 
 **Optional: real AI.** Without an API key everything still works -- AI
 summaries fall back to a templated text and transactions simply stay
@@ -330,6 +333,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0025 — Single-server deployment with docker compose](./docs/adr/0025-single-server-deployment-with-docker-compose.md)
 - [0026 — Authentication with ASP.NET Core Identity](./docs/adr/0026-authentication-with-aspnet-core-identity.md)
 - [0027 — Per-user data ownership](./docs/adr/0027-per-user-data-ownership.md)
+- [0028 — Rate limiting and forwarded headers](./docs/adr/0028-rate-limiting-and-forwarded-headers.md)
 
 ## License
 
