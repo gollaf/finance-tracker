@@ -97,6 +97,13 @@ This starts PostgreSQL, RabbitMQ, the Api and the Worker. Then open:
 - RabbitMQ management UI: `http://localhost:15672` (user and password
   `financetracker`, local development only)
 
+**Signing in.** Every `/api/...` endpoint except `/api/auth` requires a
+signed-in user ([ADR 0026](./docs/adr/0026-authentication-with-aspnet-core-identity.md)).
+In Scalar, call `POST /api/auth/register` and then `POST /api/auth/login`
+with an e-mail and a password (at least 6 characters, with an upper-case
+letter, a lower-case letter, a digit and a symbol), and enter the returned
+`accessToken` as the bearer token in Scalar's authentication settings.
+
 **Optional: real AI.** Without an API key everything still works -- AI
 summaries fall back to a templated text and transactions simply stay
 uncategorized. To enable it, get a free key at console.groq.com (no credit
@@ -114,6 +121,9 @@ For `dotnet run` outside Docker, use User Secrets instead:
 
 | Method | Route | Purpose |
 |---|---|---|
+| POST | `/api/auth/register` | Create a user (e-mail and password) |
+| POST | `/api/auth/login` | Sign in; returns an access token and a refresh token |
+| POST | `/api/auth/refresh` | Exchange a refresh token for a new access token |
 | POST | `/api/accounts` | Create an account |
 | GET | `/api/accounts/{id}/balance` | Balance, computed from its transactions |
 | POST | `/api/categories` | Create a category |
@@ -253,8 +263,8 @@ server (one VM)
 The server needs only that file and a `.env` made from
 [`env.example`](./deploy/server/env.example), which pins the version
 (`IMAGE_TAG=sha-<commit>`) and holds the passwords. Nothing is reachable from
-the internet yet; it is used through an SSH tunnel until authentication is in
-place.
+the internet yet; it is used through an SSH tunnel until each user's data is
+separated from everyone else's.
 
 ## Roadmap
 
@@ -268,21 +278,23 @@ asynchronous processing with RabbitMQ, Kubernetes, and CI/CD. Next:
     as code with Bicep, and passwordless deployment from GitHub Actions.
   - **AWS sprint** (timeboxed, on the free plan) -- the same system on AWS's
     managed container services, to compare the two platforms.
-- **Authentication** -- required before the API is exposed publicly.
+- **Per-user data** -- signing in is in place; next, each user sees only
+  their own accounts, categories and transactions, before the API goes public.
 - **Angular frontend.**
 
 The phase-by-phase plan is in [`PROJECT_PLAN.md`](./PROJECT_PLAN.md).
 
 ## Known Limitations
 
-- **No authentication yet.** Every endpoint is open; this is fine on a local
-  machine and is the first thing to add before a public deployment.
+- **Signed-in users share all data.** Signing in is required, but every user
+  still sees the same accounts and transactions until data is separated per
+  user.
 - **Local-development configuration.** The root docker compose file and the
   Kubernetes manifests run in the Development environment (API docs and
   exception details enabled) with local-only credentials; only the server
   deployment runs in Production.
 - **Not public yet.** The server deployment is reachable only through an SSH
-  tunnel until the API has authentication.
+  tunnel until data is separated per user.
 - **One outbox relay at a time.** This is enforced by deployment
   configuration, not code; running several would need row locking
   (`FOR UPDATE SKIP LOCKED`).
@@ -316,6 +328,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0023 — Production environment and the API docs setting](./docs/adr/0023-production-environment-and-api-docs-setting.md)
 - [0024 — Multi-architecture images by cross-compiling](./docs/adr/0024-multi-architecture-images.md)
 - [0025 — Single-server deployment with docker compose](./docs/adr/0025-single-server-deployment-with-docker-compose.md)
+- [0026 — Authentication with ASP.NET Core Identity](./docs/adr/0026-authentication-with-aspnet-core-identity.md)
 
 ## License
 
