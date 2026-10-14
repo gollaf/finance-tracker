@@ -5,6 +5,9 @@ using FinanceTracker.Domain.Categorization;
 using FinanceTracker.Domain.Imports;
 using FinanceTracker.Domain.Transactions;
 using FinanceTracker.Infrastructure.Outbox;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace FinanceTracker.Infrastructure.Persistence
@@ -13,7 +16,14 @@ namespace FinanceTracker.Infrastructure.Persistence
     /// EF Core DbContext for the application. Each aggregate's mapping lives
     /// in its own IEntityTypeConfiguration under Configurations/.
     /// </summary>
-    public sealed class FinanceTrackerDbContext : DbContext
+    /// <remarks>
+    /// Also holds the ASP.NET Core Identity user tables and the Data Protection
+    /// keys that sign-in tokens are encrypted with, so one database and one
+    /// migration history cover everything. IdentityUserContext rather than
+    /// IdentityDbContext: the API uses no roles, so it gets no role tables.
+    /// </remarks>
+    public sealed class FinanceTrackerDbContext
+        : IdentityUserContext<IdentityUser<Guid>, Guid>, IDataProtectionKeyContext
     {
         public FinanceTrackerDbContext(DbContextOptions<FinanceTrackerDbContext> options)
             : base(options)
@@ -37,6 +47,12 @@ namespace FinanceTracker.Infrastructure.Persistence
         /// outbox row and its change are saved in one transaction.
         /// </summary>
         public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+
+        /// <summary>
+        /// Shared by every Api instance, so a token issued by one is readable by
+        /// all of them, and still valid after a restart.
+        /// </summary>
+        public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
