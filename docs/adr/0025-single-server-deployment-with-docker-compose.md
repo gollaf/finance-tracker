@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted
+Accepted. Amended by
+[ADR 0029](./0029-https-with-caddy-on-a-duckdns-name.md): the Api is now
+public, behind Caddy.
 
 ## Context
 

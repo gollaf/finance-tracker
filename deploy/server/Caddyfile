@@ -1,0 +1,16 @@
+# Caddy is the only container reachable from the internet. It obtains and
+# renews the HTTPS certificate for PUBLIC_HOST by itself, redirects HTTP to
+# HTTPS, and passes every request on to the Api over the compose network.
+{
+	# HTTP/1.1 and HTTP/2 only. HTTP/3 runs over UDP, which would need one
+	# more port opened in both firewalls for no real gain here.
+	servers {
+		protocols h1 h2
+	}
+}
+
+{$PUBLIC_HOST} {
+	# Sets X-Forwarded-For to the visitor's address, discarding any value
+	# the visitor sent, and keeps the Host header unchanged.
+	reverse_proxy api:8080
+}

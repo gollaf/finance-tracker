@@ -259,18 +259,23 @@ and the images CI publishes
 ([ADR 0025](./docs/adr/0025-single-server-deployment-with-docker-compose.md)):
 
 ```
-server (one VM)
-  postgres, rabbitmq              no ports outside the server
-  migrate                         runs once per deploy, then exits
+internet --HTTPS--> caddy :80 :443   certificate from Let's Encrypt
+                      |
+server (one VM)       v
   api        127.0.0.1:5000       Production, API docs on
   worker                          outbox relay + consumers in one process
+  migrate                         runs once per deploy, then exits
+  postgres, rabbitmq              no ports outside the server
 ```
 
-The server needs only that file and a `.env` made from
-[`env.example`](./deploy/server/env.example), which pins the version
-(`IMAGE_TAG=sha-<commit>`) and holds the passwords. Nothing is reachable from
-the internet yet; it is used through an SSH tunnel until each user's data is
-separated from everyone else's.
+The server needs that file, the [`Caddyfile`](./deploy/server/Caddyfile)
+next to it, and a `.env` made from [`env.example`](./deploy/server/env.example),
+which pins the version (`IMAGE_TAG=sha-<commit>`), names the public host
+(`PUBLIC_HOST`) and holds the passwords. Caddy is the only container
+reachable from the internet: it serves HTTPS on a free DuckDNS name with a
+certificate it obtains and renews by itself, and forwards to the Api
+([ADR 0029](./docs/adr/0029-https-with-caddy-on-a-duckdns-name.md)). The
+RabbitMQ management UI is reachable only through an SSH tunnel.
 
 ## Roadmap
 
@@ -284,8 +289,6 @@ asynchronous processing with RabbitMQ, Kubernetes, and CI/CD. Next:
     as code with Bicep, and passwordless deployment from GitHub Actions.
   - **AWS sprint** (timeboxed, on the free plan) -- the same system on AWS's
     managed container services, to compare the two platforms.
-- **Per-user data** -- signing in is in place; next, each user sees only
-  their own accounts, categories and transactions, before the API goes public.
 - **Angular frontend.**
 
 The phase-by-phase plan is in [`PROJECT_PLAN.md`](./PROJECT_PLAN.md).
@@ -296,8 +299,8 @@ The phase-by-phase plan is in [`PROJECT_PLAN.md`](./PROJECT_PLAN.md).
   Kubernetes manifests run in the Development environment (API docs and
   exception details enabled) with local-only credentials; only the server
   deployment runs in Production.
-- **Not public yet.** The server deployment is reachable only through an SSH
-  tunnel until it is served over HTTPS.
+- **One server, no backups yet.** The public demo runs on a single VM; its
+  data could be lost with it, and may be reset.
 - **One outbox relay at a time.** This is enforced by deployment
   configuration, not code; running several would need row locking
   (`FOR UPDATE SKIP LOCKED`).
@@ -334,6 +337,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0026 — Authentication with ASP.NET Core Identity](./docs/adr/0026-authentication-with-aspnet-core-identity.md)
 - [0027 — Per-user data ownership](./docs/adr/0027-per-user-data-ownership.md)
 - [0028 — Rate limiting and forwarded headers](./docs/adr/0028-rate-limiting-and-forwarded-headers.md)
+- [0029 — HTTPS with Caddy on a DuckDNS name](./docs/adr/0029-https-with-caddy-on-a-duckdns-name.md)
 
 ## License
 

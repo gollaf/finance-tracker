@@ -1,7 +1,8 @@
 # The whole system on one server, from the images CI publishes to ghcr.io.
 #
-# Lives on the server next to a .env file made from env.example; nothing else
-# from the repository is needed there. Run from that folder:
+# Lives on the server next to the Caddyfile and a .env file made from
+# env.example; nothing else from the repository is needed there. Run from
+# that folder:
 #   docker compose pull && docker compose up -d
 
 name: finance-tracker
@@ -68,14 +69,39 @@ services:
       Database__ApplyMigrationsOnStartup: "false"
       ConnectionStrings__FinanceTracker: "Host=postgres;Port=5432;Database=financetracker;Username=postgres;Password=${POSTGRES_PASSWORD}"
       Groq__ApiKey: ${GROQ_API_KEY:-}
+      # Only Caddy's address may tell the Api who the visitor is.
+      ReverseProxy__TrustedNetworks__0: 172.30.0.10/32
     ports:
-      # 127.0.0.1 only: the Api has no authentication yet, so it must not be
-      # reachable from the internet. Docker's published ports bypass the
-      # server's own firewall rules, so this binding is the real protection.
+      # 127.0.0.1 only, for the SSH tunnel; the internet reaches the Api
+      # through Caddy. Docker's published ports bypass the server's own
+      # firewall rules, so this binding is what keeps the port private.
       - "127.0.0.1:5000:8080"
     depends_on:
       migrate:
         condition: service_completed_successfully
+
+  # The only service the internet can reach: HTTPS on 443, and 80 for the
+  # certificate challenge and the redirect to HTTPS.
+  caddy:
+    image: caddy:2.11.7
+    restart: unless-stopped
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:?Set PUBLIC_HOST in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # The certificate and its private key. Lost, Caddy would request a new
+      # certificate on every start and soon hit Let's Encrypt's weekly limit.
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      default:
+        # Fixed, so the Api can trust exactly this address.
+        ipv4_address: 172.30.0.10
+    depends_on:
+      - api
 
   # Both Worker roles in one process, so exactly one outbox relay runs.
   worker:
@@ -96,6 +122,17 @@ services:
       rabbitmq:
         condition: service_healthy
 
+networks:
+  default:
+    ipam:
+      config:
+        # Pinned so Caddy can have a fixed address. Docker hands out the
+        # upper half to the other containers, so it never gives away .10.
+        - subnet: 172.30.0.0/24
+          ip_range: 172.30.0.128/25
+
 volumes:
   postgres-data:
   rabbitmq-data:
+  caddy-data:
+  caddy-config:
