@@ -1,0 +1,13 @@
+# Runs backup.sh once; started by finance-tracker-backup.timer. Assumes the
+# deployment folder is /home/ubuntu/finance-tracker.
+
+[Unit]
+Description=Back up the finance-tracker database
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+# Through bash, so the script needs no executable bit after being downloaded.
+ExecStart=/usr/bin/bash /home/ubuntu/finance-tracker/backup.sh
