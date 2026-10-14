@@ -103,6 +103,9 @@ In Scalar, call `POST /api/auth/register` and then `POST /api/auth/login`
 with an e-mail and a password (at least 6 characters, with an upper-case
 letter, a lower-case letter, a digit and a symbol), and enter the returned
 `accessToken` as the bearer token in Scalar's authentication settings.
+Each user sees only their own accounts, transactions, categories, rules
+and budgets; anyone else's answer 404
+([ADR 0027](./docs/adr/0027-per-user-data-ownership.md)).
 
 **Optional: real AI.** Without an API key everything still works -- AI
 summaries fall back to a templated text and transactions simply stay
@@ -286,15 +289,12 @@ The phase-by-phase plan is in [`PROJECT_PLAN.md`](./PROJECT_PLAN.md).
 
 ## Known Limitations
 
-- **Signed-in users share all data.** Signing in is required, but every user
-  still sees the same accounts and transactions until data is separated per
-  user.
 - **Local-development configuration.** The root docker compose file and the
   Kubernetes manifests run in the Development environment (API docs and
   exception details enabled) with local-only credentials; only the server
   deployment runs in Production.
 - **Not public yet.** The server deployment is reachable only through an SSH
-  tunnel until data is separated per user.
+  tunnel until it is served over HTTPS.
 - **One outbox relay at a time.** This is enforced by deployment
   configuration, not code; running several would need row locking
   (`FOR UPDATE SKIP LOCKED`).
@@ -329,6 +329,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0024 — Multi-architecture images by cross-compiling](./docs/adr/0024-multi-architecture-images.md)
 - [0025 — Single-server deployment with docker compose](./docs/adr/0025-single-server-deployment-with-docker-compose.md)
 - [0026 — Authentication with ASP.NET Core Identity](./docs/adr/0026-authentication-with-aspnet-core-identity.md)
+- [0027 — Per-user data ownership](./docs/adr/0027-per-user-data-ownership.md)
 
 ## License
 

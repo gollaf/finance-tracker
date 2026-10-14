@@ -78,7 +78,8 @@ server and as two replicas in the local Kubernetes cluster (ADR 0020).
   uses, because it shares the DbContext.
 - **New endpoints outside the controllers are open by default**; they
   have to be protected explicitly.
-- **Signed-in users still share all data** until ownership is added.
+- **Signed-in users still share all data** until ownership is added
+  ([ADR 0027](./0027-per-user-data-ownership.md)).
 
 ## Alternatives Considered
 

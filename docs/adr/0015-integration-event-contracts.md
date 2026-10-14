@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted
+Accepted. Amended by [ADR 0027](./0027-per-user-data-ownership.md): event
+payloads also carry the owner's id.
 
 ## Context
 
