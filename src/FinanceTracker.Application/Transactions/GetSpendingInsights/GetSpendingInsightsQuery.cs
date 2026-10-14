@@ -12,6 +12,6 @@ namespace FinanceTracker.Application.Transactions.GetSpendingInsights
     /// docs/adr/0010-ai-insights-provider-and-integration-design.md for why
     /// the AI is only ever handed numbers this query already computed.
     /// </summary>
-    public sealed record GetSpendingInsightsQuery(AccountId AccountId, int Year, int Month)
+    public sealed record GetSpendingInsightsQuery(UserId OwnerId, AccountId AccountId, int Year, int Month)
         : IRequest<Result<SpendingInsightsDto>>;
 }

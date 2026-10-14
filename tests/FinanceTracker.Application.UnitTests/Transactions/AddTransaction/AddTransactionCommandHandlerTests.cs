@@ -14,6 +14,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.AddTransaction
 {
     public class AddTransactionCommandHandlerTests
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
         private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         private readonly IOutbox _outbox = Substitute.For<IOutbox>();
@@ -21,9 +22,9 @@ namespace FinanceTracker.Application.UnitTests.Transactions.AddTransaction
         [Fact]
         public async Task Handle_WithValidCommand_SavesTransactionInAccountsCurrency()
         {
-            var account = Account.Create("Checking", AccountType.Checking, "USD");
+            var account = Account.Create(Owner, "Checking", AccountType.Checking, "USD");
             var accountRepository = Substitute.For<IAccountRepository>();
-            accountRepository.GetByIdAsync(account.Id, Arg.Any<CancellationToken>()).Returns(account);
+            accountRepository.GetByIdAsync(Owner, account.Id, Arg.Any<CancellationToken>()).Returns(account);
 
             Transaction? savedTransaction = null;
             var transactionRepository = Substitute.For<ITransactionRepository>();
@@ -31,7 +32,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.AddTransaction
                 .AddAsync(Arg.Do<Transaction>(t => savedTransaction = t), Arg.Any<CancellationToken>());
 
             var handler = new AddTransactionCommandHandler(accountRepository, transactionRepository, _outbox);
-            var command = new AddTransactionCommand(account.Id, 42.50m, TransactionType.Expense, "Groceries", Today);
+            var command = new AddTransactionCommand(Owner, account.Id, 42.50m, TransactionType.Expense, "Groceries", Today);
 
             var result = await handler.Handle(command, CancellationToken.None);
 
@@ -51,13 +52,13 @@ namespace FinanceTracker.Application.UnitTests.Transactions.AddTransaction
         {
             var accountRepository = Substitute.For<IAccountRepository>();
             accountRepository
-                .GetByIdAsync(Arg.Any<AccountId>(), Arg.Any<CancellationToken>())
+                .GetByIdAsync(Owner, Arg.Any<AccountId>(), Arg.Any<CancellationToken>())
                 .Returns((Account?)null);
             var transactionRepository = Substitute.For<ITransactionRepository>();
 
             var handler = new AddTransactionCommandHandler(accountRepository, transactionRepository, _outbox);
             var command = new AddTransactionCommand(
-                AccountId.New(), 10m, TransactionType.Expense, "Groceries", Today);
+                Owner, AccountId.New(), 10m, TransactionType.Expense, "Groceries", Today);
 
             var result = await handler.Handle(command, CancellationToken.None);
 
@@ -71,14 +72,14 @@ namespace FinanceTracker.Application.UnitTests.Transactions.AddTransaction
         [Fact]
         public async Task Handle_WithClosedAccount_ReturnsConflict()
         {
-            var account = Account.Create("Checking", AccountType.Checking, "USD");
+            var account = Account.Create(Owner, "Checking", AccountType.Checking, "USD");
             account.Close();
             var accountRepository = Substitute.For<IAccountRepository>();
-            accountRepository.GetByIdAsync(account.Id, Arg.Any<CancellationToken>()).Returns(account);
+            accountRepository.GetByIdAsync(Owner, account.Id, Arg.Any<CancellationToken>()).Returns(account);
             var transactionRepository = Substitute.For<ITransactionRepository>();
 
             var handler = new AddTransactionCommandHandler(accountRepository, transactionRepository, _outbox);
-            var command = new AddTransactionCommand(account.Id, 10m, TransactionType.Expense, "Groceries", Today);
+            var command = new AddTransactionCommand(Owner, account.Id, 10m, TransactionType.Expense, "Groceries", Today);
 
             var result = await handler.Handle(command, CancellationToken.None);
 
@@ -92,13 +93,13 @@ namespace FinanceTracker.Application.UnitTests.Transactions.AddTransaction
         [Fact]
         public async Task Handle_WithValidCommand_EnqueuesTransactionAddedBeforeSaving()
         {
-            var account = Account.Create("Checking", AccountType.Checking, "USD");
+            var account = Account.Create(Owner, "Checking", AccountType.Checking, "USD");
             var accountRepository = Substitute.For<IAccountRepository>();
-            accountRepository.GetByIdAsync(account.Id, Arg.Any<CancellationToken>()).Returns(account);
+            accountRepository.GetByIdAsync(Owner, account.Id, Arg.Any<CancellationToken>()).Returns(account);
             var transactionRepository = Substitute.For<ITransactionRepository>();
 
             var handler = new AddTransactionCommandHandler(accountRepository, transactionRepository, _outbox);
-            var command = new AddTransactionCommand(account.Id, 18m, TransactionType.Expense, "UBER *TRIP", Today);
+            var command = new AddTransactionCommand(Owner, account.Id, 18m, TransactionType.Expense, "UBER *TRIP", Today);
 
             var result = await handler.Handle(command, CancellationToken.None);
 
@@ -111,8 +112,8 @@ namespace FinanceTracker.Application.UnitTests.Transactions.AddTransaction
             // this test.
             Received.InOrder(() =>
             {
-                _outbox.Enqueue(Arg.Is<TransactionAdded>(e => e.TransactionId == transactionId));
-                _ = transactionRepository.AddAsync(Arg.Any<Transaction>(), Arg.Any<CancellationToken>());
+                _outbox.Enqueue(Arg.Is<TransactionAdded>(e => e.TransactionId == transactionId && e.OwnerId == Owner.Value));
+                _ = transactionRepository.AddAsync(Arg.Is<Transaction>(t => t.OwnerId == Owner), Arg.Any<CancellationToken>());
             });
         }
     }

@@ -7,6 +7,10 @@ namespace FinanceTracker.Application.Transactions.GetTransactions
     {
         public GetTransactionsQueryValidator()
         {
+            RuleFor(q => q.OwnerId)
+                .NotEqual(default(UserId))
+                .WithMessage("OwnerId is required.");
+
             RuleFor(q => q.AccountId)
                 .NotEqual(default(AccountId))
                 .WithMessage("AccountId is required.");

@@ -9,6 +9,7 @@ namespace FinanceTracker.Application.Transactions.GetTransactions
     /// optional and inclusive — omit either to leave that side of the range
     /// unbounded.
     /// </summary>
-    public sealed record GetTransactionsQuery(AccountId AccountId, DateOnly? From = null, DateOnly? To = null)
+    public sealed record GetTransactionsQuery(
+        UserId OwnerId, AccountId AccountId, DateOnly? From = null, DateOnly? To = null)
         : IRequest<Result<IReadOnlyList<TransactionSummaryDto>>>;
 }

@@ -12,11 +12,12 @@ namespace FinanceTracker.Application.UnitTests.Transactions.CategorizeTransactio
 {
     public class CategorizeTransactionCommandHandlerTests
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
         private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         private static Transaction NewTransaction(CategoryId? categoryId = null) =>
             Transaction.Create(
-                AccountId.New(), Money.Create(20m, "USD"), TransactionType.Expense, "Coffee", Today, categoryId);
+                Owner, AccountId.New(), Money.Create(20m, "USD"), TransactionType.Expense, "Coffee", Today, categoryId);
 
         [Fact]
         public async Task Handle_WithValidCategoryId_AssignsCategoryAndSaves()
@@ -25,13 +26,13 @@ namespace FinanceTracker.Application.UnitTests.Transactions.CategorizeTransactio
             var category = Category.Create("Dining", parentCategoryId: null);
 
             var transactionRepository = Substitute.For<ITransactionRepository>();
-            transactionRepository.GetByIdAsync(transaction.Id, Arg.Any<CancellationToken>()).Returns(transaction);
+            transactionRepository.GetByIdAsync(Owner, transaction.Id, Arg.Any<CancellationToken>()).Returns(transaction);
 
             var categoryRepository = Substitute.For<ICategoryRepository>();
             categoryRepository.GetByIdAsync(category.Id, Arg.Any<CancellationToken>()).Returns(category);
 
             var handler = new CategorizeTransactionCommandHandler(transactionRepository, categoryRepository);
-            var command = new CategorizeTransactionCommand(transaction.Id, category.Id);
+            var command = new CategorizeTransactionCommand(Owner, transaction.Id, category.Id);
 
             var result = await handler.Handle(command, CancellationToken.None);
 
@@ -46,12 +47,12 @@ namespace FinanceTracker.Application.UnitTests.Transactions.CategorizeTransactio
             var transaction = NewTransaction(CategoryId.New());
 
             var transactionRepository = Substitute.For<ITransactionRepository>();
-            transactionRepository.GetByIdAsync(transaction.Id, Arg.Any<CancellationToken>()).Returns(transaction);
+            transactionRepository.GetByIdAsync(Owner, transaction.Id, Arg.Any<CancellationToken>()).Returns(transaction);
 
             var categoryRepository = Substitute.For<ICategoryRepository>();
 
             var handler = new CategorizeTransactionCommandHandler(transactionRepository, categoryRepository);
-            var command = new CategorizeTransactionCommand(transaction.Id, null);
+            var command = new CategorizeTransactionCommand(Owner, transaction.Id, null);
 
             var result = await handler.Handle(command, CancellationToken.None);
 
@@ -66,13 +67,13 @@ namespace FinanceTracker.Application.UnitTests.Transactions.CategorizeTransactio
         {
             var transactionRepository = Substitute.For<ITransactionRepository>();
             transactionRepository
-                .GetByIdAsync(Arg.Any<TransactionId>(), Arg.Any<CancellationToken>())
+                .GetByIdAsync(Owner, Arg.Any<TransactionId>(), Arg.Any<CancellationToken>())
                 .Returns((Transaction?)null);
 
             var categoryRepository = Substitute.For<ICategoryRepository>();
 
             var handler = new CategorizeTransactionCommandHandler(transactionRepository, categoryRepository);
-            var command = new CategorizeTransactionCommand(TransactionId.New(), CategoryId.New());
+            var command = new CategorizeTransactionCommand(Owner, TransactionId.New(), CategoryId.New());
 
             var result = await handler.Handle(command, CancellationToken.None);
 
@@ -87,7 +88,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.CategorizeTransactio
             var transaction = NewTransaction();
 
             var transactionRepository = Substitute.For<ITransactionRepository>();
-            transactionRepository.GetByIdAsync(transaction.Id, Arg.Any<CancellationToken>()).Returns(transaction);
+            transactionRepository.GetByIdAsync(Owner, transaction.Id, Arg.Any<CancellationToken>()).Returns(transaction);
 
             var categoryRepository = Substitute.For<ICategoryRepository>();
             categoryRepository
@@ -95,7 +96,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.CategorizeTransactio
                 .Returns((Category?)null);
 
             var handler = new CategorizeTransactionCommandHandler(transactionRepository, categoryRepository);
-            var command = new CategorizeTransactionCommand(transaction.Id, CategoryId.New());
+            var command = new CategorizeTransactionCommand(Owner, transaction.Id, CategoryId.New());
 
             var result = await handler.Handle(command, CancellationToken.None);
 

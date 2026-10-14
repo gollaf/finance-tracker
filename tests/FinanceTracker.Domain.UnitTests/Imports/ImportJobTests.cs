@@ -7,13 +7,14 @@ namespace FinanceTracker.Domain.UnitTests.Imports
 {
     public class ImportJobTests
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
         private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         private static ImportJobRow Row(int rowNumber, string description = "Coffee") =>
             new(rowNumber, 4.5m, TransactionType.Expense, description, Today);
 
         private static ImportJob NewJob(params ImportJobRowError[] parseErrors) =>
-            ImportJob.Create(AccountId.New(), new[] { Row(2), Row(4) }, parseErrors);
+            ImportJob.Create(Owner, AccountId.New(), new[] { Row(2), Row(4) }, parseErrors);
 
         [Fact]
         public void Create_StartsPendingWithRowsAndParseErrors()
@@ -21,7 +22,7 @@ namespace FinanceTracker.Domain.UnitTests.Imports
             var accountId = AccountId.New();
 
             var job = ImportJob.Create(
-                accountId, new[] { Row(2), Row(4) }, new[] { new ImportJobRowError(3, "Bad amount") });
+                Owner, accountId, new[] { Row(2), Row(4) }, new[] { new ImportJobRowError(3, "Bad amount") });
 
             job.Status.Should().Be(ImportJobStatus.Pending);
             job.IsPending.Should().BeTrue();
@@ -35,7 +36,7 @@ namespace FinanceTracker.Domain.UnitTests.Imports
         [Fact]
         public void Create_WithNoRows_Throws()
         {
-            var act = () => ImportJob.Create(AccountId.New(), Array.Empty<ImportJobRow>(), Array.Empty<ImportJobRowError>());
+            var act = () => ImportJob.Create(Owner, AccountId.New(), Array.Empty<ImportJobRow>(), Array.Empty<ImportJobRowError>());
 
             act.Should().Throw<ArgumentException>();
         }
@@ -45,7 +46,7 @@ namespace FinanceTracker.Domain.UnitTests.Imports
         {
             var rows = Enumerable.Range(2, ImportJob.MaxRows + 1).Select(n => Row(n));
 
-            var act = () => ImportJob.Create(AccountId.New(), rows, Array.Empty<ImportJobRowError>());
+            var act = () => ImportJob.Create(Owner, AccountId.New(), rows, Array.Empty<ImportJobRowError>());
 
             act.Should().Throw<ArgumentException>();
         }
@@ -119,6 +120,22 @@ namespace FinanceTracker.Domain.UnitTests.Imports
             var act = () => job.Complete(0, Array.Empty<ImportJobRowError>());
 
             act.Should().Throw<InvalidOperationException>();
+        }
+
+        [Fact]
+        public void Create_StoresTheOwner()
+        {
+            var job = ImportJob.Create(Owner, AccountId.New(), new[] { Row(2) }, Array.Empty<ImportJobRowError>());
+
+            job.OwnerId.Should().Be(Owner);
+        }
+
+        [Fact]
+        public void Create_WithoutOwner_Throws()
+        {
+            var act = () => ImportJob.Create(default, AccountId.New(), new[] { Row(2) }, Array.Empty<ImportJobRowError>());
+
+            act.Should().Throw<ArgumentException>();
         }
     }
 }

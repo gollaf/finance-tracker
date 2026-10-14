@@ -35,7 +35,12 @@ namespace FinanceTracker.Api.Transactions
         public async Task<IActionResult> Add(AddTransactionRequest request, CancellationToken cancellationToken)
         {
             var command = new AddTransactionCommand(
-                new AccountId(request.AccountId), request.Amount, request.Type, request.Description, request.OccurredOn);
+                User.GetUserId(),
+                new AccountId(request.AccountId),
+                request.Amount,
+                request.Type,
+                request.Description,
+                request.OccurredOn);
             var result = await _sender.Send(command, cancellationToken);
 
             if (result.IsFailure)
@@ -51,7 +56,7 @@ namespace FinanceTracker.Api.Transactions
         public async Task<IActionResult> Update(Guid id, UpdateTransactionRequest request, CancellationToken cancellationToken)
         {
             var command = new UpdateTransactionCommand(
-                new TransactionId(id), request.Amount, request.Description, request.OccurredOn);
+                User.GetUserId(), new TransactionId(id), request.Amount, request.Description, request.OccurredOn);
             var result = await _sender.Send(command, cancellationToken);
 
             if (result.IsFailure)
@@ -63,7 +68,7 @@ namespace FinanceTracker.Api.Transactions
         [HttpDelete("{id:guid}")]
         public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
         {
-            var command = new DeleteTransactionCommand(new TransactionId(id));
+            var command = new DeleteTransactionCommand(User.GetUserId(), new TransactionId(id));
             var result = await _sender.Send(command, cancellationToken);
 
             if (result.IsFailure)
@@ -77,7 +82,7 @@ namespace FinanceTracker.Api.Transactions
         public async Task<IActionResult> Categorize(Guid id, CategorizeTransactionRequest request, CancellationToken cancellationToken)
         {
             var categoryId = request.CategoryId is { } rawCategoryId ? new CategoryId(rawCategoryId) : (CategoryId?)null;
-            var command = new CategorizeTransactionCommand(new TransactionId(id), categoryId);
+            var command = new CategorizeTransactionCommand(User.GetUserId(), new TransactionId(id), categoryId);
             var result = await _sender.Send(command, cancellationToken);
 
             if (result.IsFailure)
@@ -92,7 +97,7 @@ namespace FinanceTracker.Api.Transactions
         public async Task<IActionResult> GetTransactions(
             [FromQuery] Guid accountId, [FromQuery] DateOnly? from, [FromQuery] DateOnly? to, CancellationToken cancellationToken)
         {
-            var query = new GetTransactionsQuery(new AccountId(accountId), from, to);
+            var query = new GetTransactionsQuery(User.GetUserId(), new AccountId(accountId), from, to);
             var result = await _sender.Send(query, cancellationToken);
 
             if (result.IsFailure)
@@ -117,7 +122,7 @@ namespace FinanceTracker.Api.Transactions
         public async Task<IActionResult> GetSpendingSummary(
             [FromQuery] Guid accountId, [FromQuery] int year, [FromQuery] int month, CancellationToken cancellationToken)
         {
-            var query = new GetSpendingSummaryQuery(new AccountId(accountId), year, month);
+            var query = new GetSpendingSummaryQuery(User.GetUserId(), new AccountId(accountId), year, month);
             var result = await _sender.Send(query, cancellationToken);
 
             if (result.IsFailure)
@@ -136,7 +141,7 @@ namespace FinanceTracker.Api.Transactions
         public async Task<IActionResult> GetSpendingInsights(
             [FromQuery] Guid accountId, [FromQuery] int year, [FromQuery] int month, CancellationToken cancellationToken)
         {
-            var query = new GetSpendingInsightsQuery(new AccountId(accountId), year, month);
+            var query = new GetSpendingInsightsQuery(User.GetUserId(), new AccountId(accountId), year, month);
             var result = await _sender.Send(query, cancellationToken);
 
             if (result.IsFailure)
@@ -196,7 +201,7 @@ namespace FinanceTracker.Api.Transactions
                 return new ObjectResult(problem) { StatusCode = StatusCodes.Status400BadRequest };
             }
 
-            var command = new StartImportCommand(new AccountId(request.AccountId), rows, parseErrors);
+            var command = new StartImportCommand(User.GetUserId(), new AccountId(request.AccountId), rows, parseErrors);
             var result = await _sender.Send(command, cancellationToken);
 
             if (result.IsFailure)

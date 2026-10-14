@@ -12,9 +12,10 @@ namespace FinanceTracker.Application.UnitTests.Accounts.GetAccountBalance
 {
     public class GetAccountBalanceQueryHandlerTests
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
         private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
 
-        private static Account NewAccount() => Account.Create("Checking", AccountType.Checking, "USD");
+        private static Account NewAccount() => Account.Create(Owner, "Checking", AccountType.Checking, "USD");
 
         [Fact]
         public async Task Handle_WithNoTransactions_ReturnsZeroBalance()
@@ -22,15 +23,15 @@ namespace FinanceTracker.Application.UnitTests.Accounts.GetAccountBalance
             var account = NewAccount();
 
             var accountRepository = Substitute.For<IAccountRepository>();
-            accountRepository.GetByIdAsync(account.Id, Arg.Any<CancellationToken>()).Returns(account);
+            accountRepository.GetByIdAsync(Owner, account.Id, Arg.Any<CancellationToken>()).Returns(account);
 
             var transactionRepository = Substitute.For<ITransactionRepository>();
             transactionRepository
-                .GetByAccountIdAsync(account.Id, Arg.Any<CancellationToken>())
+                .GetByAccountIdAsync(Owner, account.Id, Arg.Any<CancellationToken>())
                 .Returns(Array.Empty<Transaction>());
 
             var handler = new GetAccountBalanceQueryHandler(accountRepository, transactionRepository);
-            var query = new GetAccountBalanceQuery(account.Id);
+            var query = new GetAccountBalanceQuery(Owner, account.Id);
 
             var result = await handler.Handle(query, CancellationToken.None);
 
@@ -44,20 +45,20 @@ namespace FinanceTracker.Application.UnitTests.Accounts.GetAccountBalance
             var account = NewAccount();
             var transactions = new[]
             {
-                Transaction.Create(account.Id, Money.Create(100m, "USD"), TransactionType.Income, "Salary", Today),
-                Transaction.Create(account.Id, Money.Create(30m, "USD"), TransactionType.Expense, "Groceries", Today),
+                Transaction.Create(Owner, account.Id, Money.Create(100m, "USD"), TransactionType.Income, "Salary", Today),
+                Transaction.Create(Owner, account.Id, Money.Create(30m, "USD"), TransactionType.Expense, "Groceries", Today),
             };
 
             var accountRepository = Substitute.For<IAccountRepository>();
-            accountRepository.GetByIdAsync(account.Id, Arg.Any<CancellationToken>()).Returns(account);
+            accountRepository.GetByIdAsync(Owner, account.Id, Arg.Any<CancellationToken>()).Returns(account);
 
             var transactionRepository = Substitute.For<ITransactionRepository>();
             transactionRepository
-                .GetByAccountIdAsync(account.Id, Arg.Any<CancellationToken>())
+                .GetByAccountIdAsync(Owner, account.Id, Arg.Any<CancellationToken>())
                 .Returns(transactions);
 
             var handler = new GetAccountBalanceQueryHandler(accountRepository, transactionRepository);
-            var query = new GetAccountBalanceQuery(account.Id);
+            var query = new GetAccountBalanceQuery(Owner, account.Id);
 
             var result = await handler.Handle(query, CancellationToken.None);
 
@@ -70,13 +71,13 @@ namespace FinanceTracker.Application.UnitTests.Accounts.GetAccountBalance
         {
             var accountRepository = Substitute.For<IAccountRepository>();
             accountRepository
-                .GetByIdAsync(Arg.Any<AccountId>(), Arg.Any<CancellationToken>())
+                .GetByIdAsync(Owner, Arg.Any<AccountId>(), Arg.Any<CancellationToken>())
                 .Returns((Account?)null);
 
             var transactionRepository = Substitute.For<ITransactionRepository>();
 
             var handler = new GetAccountBalanceQueryHandler(accountRepository, transactionRepository);
-            var query = new GetAccountBalanceQuery(AccountId.New());
+            var query = new GetAccountBalanceQuery(Owner, AccountId.New());
 
             var result = await handler.Handle(query, CancellationToken.None);
 

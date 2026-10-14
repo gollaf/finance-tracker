@@ -9,6 +9,7 @@ namespace FinanceTracker.Application.Transactions.CategorizeTransaction
     /// passing null uncategorizes the transaction, mirroring
     /// Transaction.Recategorize's own signature.
     /// </summary>
-    public sealed record CategorizeTransactionCommand(TransactionId TransactionId, CategoryId? CategoryId)
+    public sealed record CategorizeTransactionCommand(
+        UserId OwnerId, TransactionId TransactionId, CategoryId? CategoryId)
         : IRequest<Result>;
 }

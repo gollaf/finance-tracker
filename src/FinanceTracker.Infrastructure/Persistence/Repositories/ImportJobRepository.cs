@@ -14,8 +14,8 @@ namespace FinanceTracker.Infrastructure.Persistence.Repositories
             _context = context;
         }
 
-        public Task<ImportJob?> GetByIdAsync(ImportJobId id, CancellationToken cancellationToken = default) =>
-            _context.ImportJobs.SingleOrDefaultAsync(j => j.Id == id, cancellationToken);
+        public Task<ImportJob?> GetByIdAsync(UserId ownerId, ImportJobId id, CancellationToken cancellationToken = default) =>
+            _context.ImportJobs.SingleOrDefaultAsync(j => j.Id == id && j.OwnerId == ownerId, cancellationToken);
 
         public async Task AddAsync(ImportJob importJob, CancellationToken cancellationToken = default)
         {

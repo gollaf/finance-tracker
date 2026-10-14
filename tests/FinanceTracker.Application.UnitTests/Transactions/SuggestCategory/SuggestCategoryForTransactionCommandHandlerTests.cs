@@ -12,6 +12,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.SuggestCategory
 {
     public class SuggestCategoryForTransactionCommandHandlerTests
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
         private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         private readonly ITransactionRepository _transactionRepository = Substitute.For<ITransactionRepository>();
@@ -27,9 +28,9 @@ namespace FinanceTracker.Application.UnitTests.Transactions.SuggestCategory
         private Transaction GivenTransaction(CategoryId? categoryId = null)
         {
             var transaction = Transaction.Create(
-                AccountId.New(), Money.Create(18m, "USD"), TransactionType.Expense, "UBER *TRIP", Today, categoryId);
+                Owner, AccountId.New(), Money.Create(18m, "USD"), TransactionType.Expense, "UBER *TRIP", Today, categoryId);
 
-            _transactionRepository.GetByIdAsync(transaction.Id, Arg.Any<CancellationToken>()).Returns(transaction);
+            _transactionRepository.GetByIdAsync(Owner, transaction.Id, Arg.Any<CancellationToken>()).Returns(transaction);
             return transaction;
         }
 
@@ -47,7 +48,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.SuggestCategory
         private async Task<CategorySuggestionOutcome> HandleAsync(TransactionId transactionId)
         {
             var result = await NewHandler().Handle(
-                new SuggestCategoryForTransactionCommand(transactionId), CancellationToken.None);
+                new SuggestCategoryForTransactionCommand(Owner, transactionId), CancellationToken.None);
 
             // Every expected situation is a success with an outcome; see
             // SuggestCategoryForTransactionCommand's remarks.
@@ -62,14 +63,14 @@ namespace FinanceTracker.Application.UnitTests.Transactions.SuggestCategory
             GivenCategories(_groceries, _transport);
             GivenSuggestion(Result.Success<CategoryId?>(_transport.Id));
             _transactionRepository
-                .TrySetCategoryIfUncategorizedAsync(transaction.Id, _transport.Id, Arg.Any<CancellationToken>())
+                .TrySetCategoryIfUncategorizedAsync(Owner, transaction.Id, _transport.Id, Arg.Any<CancellationToken>())
                 .Returns(true);
 
             var outcome = await HandleAsync(transaction.Id);
 
             outcome.Should().Be(CategorySuggestionOutcome.Categorized);
             await _transactionRepository.Received(1)
-                .TrySetCategoryIfUncategorizedAsync(transaction.Id, _transport.Id, Arg.Any<CancellationToken>());
+                .TrySetCategoryIfUncategorizedAsync(Owner, transaction.Id, _transport.Id, Arg.Any<CancellationToken>());
             // Never the unconditional update -- it could overwrite a
             // category the user set while the AI was thinking.
             await _transactionRepository.DidNotReceive().UpdateAsync(Arg.Any<Transaction>(), Arg.Any<CancellationToken>());
@@ -101,7 +102,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.SuggestCategory
             GivenCategories(_groceries, _transport);
             GivenSuggestion(Result.Success<CategoryId?>(_transport.Id));
             _transactionRepository
-                .TrySetCategoryIfUncategorizedAsync(transaction.Id, _transport.Id, Arg.Any<CancellationToken>())
+                .TrySetCategoryIfUncategorizedAsync(Owner, transaction.Id, _transport.Id, Arg.Any<CancellationToken>())
                 .Returns(false);
 
             var outcome = await HandleAsync(transaction.Id);
@@ -125,7 +126,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.SuggestCategory
         public async Task Handle_WhenTransactionNoLongerExists_ReportsNotFoundWithoutFailing()
         {
             _transactionRepository
-                .GetByIdAsync(Arg.Any<TransactionId>(), Arg.Any<CancellationToken>())
+                .GetByIdAsync(Owner, Arg.Any<TransactionId>(), Arg.Any<CancellationToken>())
                 .Returns((Transaction?)null);
 
             var outcome = await HandleAsync(TransactionId.New());
@@ -190,7 +191,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.SuggestCategory
         private async Task AssertNothingWasWrittenAsync()
         {
             await _transactionRepository.DidNotReceive().TrySetCategoryIfUncategorizedAsync(
-                Arg.Any<TransactionId>(), Arg.Any<CategoryId>(), Arg.Any<CancellationToken>());
+                Owner, Arg.Any<TransactionId>(), Arg.Any<CategoryId>(), Arg.Any<CancellationToken>());
             await _transactionRepository.DidNotReceive().UpdateAsync(Arg.Any<Transaction>(), Arg.Any<CancellationToken>());
         }
     }

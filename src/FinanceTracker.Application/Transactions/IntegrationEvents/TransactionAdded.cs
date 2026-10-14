@@ -15,7 +15,11 @@ namespace FinanceTracker.Application.Transactions.IntegrationEvents
     /// wire contract between processes, serialized to JSON, and must not
     /// change shape just because a domain type's internals do.
     /// </param>
-    public sealed record TransactionAdded(Guid TransactionId) : IIntegrationEvent
+    /// <param name="OwnerId">
+    /// The Transaction's owner, so a consumer can read it the same
+    /// owner-scoped way the Api does.
+    /// </param>
+    public sealed record TransactionAdded(Guid TransactionId, Guid OwnerId) : IIntegrationEvent
     {
         public static string EventName => "transaction.added";
     }

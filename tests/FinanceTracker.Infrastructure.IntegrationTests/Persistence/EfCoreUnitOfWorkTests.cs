@@ -1,5 +1,6 @@
 using FinanceTracker.Domain.Accounts;
 using FinanceTracker.Domain.Categories;
+using FinanceTracker.Domain.Common;
 using FinanceTracker.Infrastructure.Persistence;
 using FinanceTracker.Infrastructure.Persistence.Repositories;
 using FluentAssertions;
@@ -16,6 +17,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence
     /// </summary>
     public sealed class EfCoreUnitOfWorkTests : IAsyncLifetime
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
         private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
             .Build();
 
@@ -45,7 +47,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence
                 await unitOfWork.ExecuteAtomicallyAsync(async cancellationToken =>
                 {
                     await new AccountRepository(context).AddAsync(
-                        Account.Create("Checking", AccountType.Checking, "USD"), cancellationToken);
+                        Account.Create(Owner, "Checking", AccountType.Checking, "USD"), cancellationToken);
                     await new CategoryRepository(context).AddAsync(Category.Create("Groceries"), cancellationToken);
                     return true;
                 });
@@ -67,7 +69,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence
                 {
                     // This SaveChangesAsync completes without error...
                     await new AccountRepository(context).AddAsync(
-                        Account.Create("Checking", AccountType.Checking, "USD"), cancellationToken);
+                        Account.Create(Owner, "Checking", AccountType.Checking, "USD"), cancellationToken);
 
                     // ...but the operation as a whole doesn't.
                     throw new InvalidOperationException("Simulated crash halfway through.");
@@ -92,7 +94,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence
                     await unitOfWork.ExecuteAtomicallyAsync(async innerToken =>
                     {
                         await new AccountRepository(context).AddAsync(
-                            Account.Create("Checking", AccountType.Checking, "USD"), innerToken);
+                            Account.Create(Owner, "Checking", AccountType.Checking, "USD"), innerToken);
                         return true;
                     }, outerToken);
 

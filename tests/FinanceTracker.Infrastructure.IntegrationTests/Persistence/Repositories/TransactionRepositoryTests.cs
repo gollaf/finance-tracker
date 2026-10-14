@@ -12,6 +12,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
 {
     public sealed class TransactionRepositoryTests : IAsyncLifetime
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
         private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
             .Build();
 
@@ -44,7 +45,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         // AccountId and CategoryId are foreign keys, so the rows must exist.
         private async Task<AccountId> CreatePersistedAccountAsync(string name = "Checking")
         {
-            var account = Account.Create(name, AccountType.Checking, "USD");
+            var account = Account.Create(Owner, name, AccountType.Checking, "USD");
             await _accountRepository.AddAsync(account, CancellationToken.None);
             return account.Id;
         }
@@ -64,13 +65,14 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
             var amount = Money.Create(42.50m, "USD");
             var occurredOn = new DateOnly(2026, 9, 1);
             var transaction = Transaction.Create(
-                accountId, amount, TransactionType.Expense, "Groceries", occurredOn, categoryId);
+                Owner, accountId, amount, TransactionType.Expense, "Groceries", occurredOn, categoryId);
 
             await _repository.AddAsync(transaction, CancellationToken.None);
-            var loaded = await _repository.GetByIdAsync(transaction.Id, CancellationToken.None);
+            var loaded = await _repository.GetByIdAsync(Owner, transaction.Id, CancellationToken.None);
 
             loaded.Should().NotBeNull();
             loaded!.Id.Should().Be(transaction.Id);
+            loaded.OwnerId.Should().Be(Owner);
             loaded.AccountId.Should().Be(accountId);
             loaded.CategoryId.Should().Be(categoryId);
             loaded.Amount.Should().Be(amount);
@@ -85,10 +87,10 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         {
             var accountId = await CreatePersistedAccountAsync();
             var transaction = Transaction.Create(
-                accountId, Money.Create(10m, "USD"), TransactionType.Income, "Refund", new DateOnly(2026, 9, 1));
+                Owner, accountId, Money.Create(10m, "USD"), TransactionType.Income, "Refund", new DateOnly(2026, 9, 1));
 
             await _repository.AddAsync(transaction, CancellationToken.None);
-            var loaded = await _repository.GetByIdAsync(transaction.Id, CancellationToken.None);
+            var loaded = await _repository.GetByIdAsync(Owner, transaction.Id, CancellationToken.None);
 
             loaded!.CategoryId.Should().BeNull();
         }
@@ -96,7 +98,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         [Fact]
         public async Task GetByIdAsync_WithUnknownId_ReturnsNull()
         {
-            var loaded = await _repository.GetByIdAsync(TransactionId.New(), CancellationToken.None);
+            var loaded = await _repository.GetByIdAsync(Owner, TransactionId.New(), CancellationToken.None);
 
             loaded.Should().BeNull();
         }
@@ -108,13 +110,13 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
             var otherAccountId = await CreatePersistedAccountAsync("Savings");
 
             var transaction = Transaction.Create(
-                accountId, Money.Create(10m, "USD"), TransactionType.Expense, "Coffee", new DateOnly(2026, 9, 1));
+                Owner, accountId, Money.Create(10m, "USD"), TransactionType.Expense, "Coffee", new DateOnly(2026, 9, 1));
             var otherTransaction = Transaction.Create(
-                otherAccountId, Money.Create(20m, "USD"), TransactionType.Expense, "Books", new DateOnly(2026, 9, 1));
+                Owner, otherAccountId, Money.Create(20m, "USD"), TransactionType.Expense, "Books", new DateOnly(2026, 9, 1));
             await _repository.AddAsync(transaction, CancellationToken.None);
             await _repository.AddAsync(otherTransaction, CancellationToken.None);
 
-            var results = await _repository.GetByAccountIdAsync(accountId, CancellationToken.None);
+            var results = await _repository.GetByAccountIdAsync(Owner, accountId, CancellationToken.None);
 
             results.Should().ContainSingle();
             results[0].Id.Should().Be(transaction.Id);
@@ -128,11 +130,11 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
             var categoryId = await CreatePersistedCategoryAsync();
 
             var inAccountOne = Transaction.Create(
-                accountId, Money.Create(10m, "USD"), TransactionType.Expense, "Coffee", new DateOnly(2026, 9, 1), categoryId);
+                Owner, accountId, Money.Create(10m, "USD"), TransactionType.Expense, "Coffee", new DateOnly(2026, 9, 1), categoryId);
             var inAccountTwo = Transaction.Create(
-                otherAccountId, Money.Create(15m, "USD"), TransactionType.Expense, "Tea", new DateOnly(2026, 9, 2), categoryId);
+                Owner, otherAccountId, Money.Create(15m, "USD"), TransactionType.Expense, "Tea", new DateOnly(2026, 9, 2), categoryId);
             var uncategorized = Transaction.Create(
-                accountId, Money.Create(20m, "USD"), TransactionType.Expense, "Misc", new DateOnly(2026, 9, 3));
+                Owner, accountId, Money.Create(20m, "USD"), TransactionType.Expense, "Misc", new DateOnly(2026, 9, 3));
             await _repository.AddAsync(inAccountOne, CancellationToken.None);
             await _repository.AddAsync(inAccountTwo, CancellationToken.None);
             await _repository.AddAsync(uncategorized, CancellationToken.None);
@@ -148,13 +150,13 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         {
             var accountId = await CreatePersistedAccountAsync();
             var transaction = Transaction.Create(
-                accountId, Money.Create(10m, "USD"), TransactionType.Expense, "Coffee", new DateOnly(2026, 9, 1));
+                Owner, accountId, Money.Create(10m, "USD"), TransactionType.Expense, "Coffee", new DateOnly(2026, 9, 1));
             await _repository.AddAsync(transaction, CancellationToken.None);
 
             transaction.UpdateAmount(Money.Create(12.5m, "USD"));
             await _repository.UpdateAsync(transaction, CancellationToken.None);
 
-            var loaded = await _repository.GetByIdAsync(transaction.Id, CancellationToken.None);
+            var loaded = await _repository.GetByIdAsync(Owner, transaction.Id, CancellationToken.None);
 
             loaded!.Amount.Should().Be(Money.Create(12.5m, "USD"));
         }
@@ -165,10 +167,10 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
             var accountId = await CreatePersistedAccountAsync();
             var categoryId = await CreatePersistedCategoryAsync();
             var transaction = Transaction.Create(
-                accountId, Money.Create(10m, "USD"), TransactionType.Expense, "Coffee", new DateOnly(2026, 9, 1));
+                Owner, accountId, Money.Create(10m, "USD"), TransactionType.Expense, "Coffee", new DateOnly(2026, 9, 1));
             await _repository.AddAsync(transaction, CancellationToken.None);
 
-            var updated = await _repository.TrySetCategoryIfUncategorizedAsync(transaction.Id, categoryId, CancellationToken.None);
+            var updated = await _repository.TrySetCategoryIfUncategorizedAsync(Owner, transaction.Id, categoryId, CancellationToken.None);
 
             updated.Should().BeTrue();
             (await LoadFreshAsync(transaction.Id))!.CategoryId.Should().Be(categoryId);
@@ -181,10 +183,10 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
             var chosenByUser = await CreatePersistedCategoryAsync("Dining");
             var suggestedByAi = await CreatePersistedCategoryAsync("Groceries");
             var transaction = Transaction.Create(
-                accountId, Money.Create(10m, "USD"), TransactionType.Expense, "Coffee", new DateOnly(2026, 9, 1), chosenByUser);
+                Owner, accountId, Money.Create(10m, "USD"), TransactionType.Expense, "Coffee", new DateOnly(2026, 9, 1), chosenByUser);
             await _repository.AddAsync(transaction, CancellationToken.None);
 
-            var updated = await _repository.TrySetCategoryIfUncategorizedAsync(transaction.Id, suggestedByAi, CancellationToken.None);
+            var updated = await _repository.TrySetCategoryIfUncategorizedAsync(Owner, transaction.Id, suggestedByAi, CancellationToken.None);
 
             updated.Should().BeFalse();
             (await LoadFreshAsync(transaction.Id))!.CategoryId.Should().Be(chosenByUser);
@@ -195,7 +197,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         {
             var categoryId = await CreatePersistedCategoryAsync();
 
-            var updated = await _repository.TrySetCategoryIfUncategorizedAsync(TransactionId.New(), categoryId, CancellationToken.None);
+            var updated = await _repository.TrySetCategoryIfUncategorizedAsync(Owner, TransactionId.New(), categoryId, CancellationToken.None);
 
             updated.Should().BeFalse();
         }
@@ -213,7 +215,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
                 .Options;
 
             await using var freshContext = new FinanceTrackerDbContext(options);
-            return await new TransactionRepository(freshContext).GetByIdAsync(id, CancellationToken.None);
+            return await new TransactionRepository(freshContext).GetByIdAsync(Owner, id, CancellationToken.None);
         }
 
         [Fact]
@@ -221,13 +223,55 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         {
             var accountId = await CreatePersistedAccountAsync();
             var transaction = Transaction.Create(
-                accountId, Money.Create(10m, "USD"), TransactionType.Expense, "Coffee", new DateOnly(2026, 9, 1));
+                Owner, accountId, Money.Create(10m, "USD"), TransactionType.Expense, "Coffee", new DateOnly(2026, 9, 1));
             await _repository.AddAsync(transaction, CancellationToken.None);
 
             await _repository.DeleteAsync(transaction, CancellationToken.None);
 
-            var loaded = await _repository.GetByIdAsync(transaction.Id, CancellationToken.None);
+            var loaded = await _repository.GetByIdAsync(Owner, transaction.Id, CancellationToken.None);
             loaded.Should().BeNull();
+        }
+
+        [Fact]
+        public async Task GetByIdAsync_ForAnotherOwner_ReturnsNull()
+        {
+            var accountId = await CreatePersistedAccountAsync();
+            var transaction = Transaction.Create(
+                Owner, accountId, Money.Create(10m, "USD"), TransactionType.Expense, "Coffee", new DateOnly(2026, 9, 1));
+            await _repository.AddAsync(transaction, CancellationToken.None);
+
+            var loaded = await _repository.GetByIdAsync(new UserId(Guid.NewGuid()), transaction.Id, CancellationToken.None);
+
+            loaded.Should().BeNull();
+        }
+
+        [Fact]
+        public async Task GetByAccountIdAsync_ForAnotherOwner_ReturnsNothing()
+        {
+            var accountId = await CreatePersistedAccountAsync();
+            var transaction = Transaction.Create(
+                Owner, accountId, Money.Create(10m, "USD"), TransactionType.Expense, "Coffee", new DateOnly(2026, 9, 1));
+            await _repository.AddAsync(transaction, CancellationToken.None);
+
+            var results = await _repository.GetByAccountIdAsync(new UserId(Guid.NewGuid()), accountId, CancellationToken.None);
+
+            results.Should().BeEmpty();
+        }
+
+        [Fact]
+        public async Task TrySetCategoryIfUncategorizedAsync_ForAnotherOwner_LeavesItAndReturnsFalse()
+        {
+            var accountId = await CreatePersistedAccountAsync();
+            var categoryId = await CreatePersistedCategoryAsync();
+            var transaction = Transaction.Create(
+                Owner, accountId, Money.Create(10m, "USD"), TransactionType.Expense, "Coffee", new DateOnly(2026, 9, 1));
+            await _repository.AddAsync(transaction, CancellationToken.None);
+
+            var updated = await _repository.TrySetCategoryIfUncategorizedAsync(
+                new UserId(Guid.NewGuid()), transaction.Id, categoryId, CancellationToken.None);
+
+            updated.Should().BeFalse();
+            (await LoadFreshAsync(transaction.Id))!.CategoryId.Should().BeNull();
         }
     }
 }

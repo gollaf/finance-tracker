@@ -42,12 +42,17 @@ namespace FinanceTracker.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("OwnerId");
 
                     b.ToTable("Accounts", (string)null);
                 });
@@ -162,6 +167,9 @@ namespace FinanceTracker.Infrastructure.Migrations
                     b.Property<int>("ImportedCount")
                         .HasColumnType("integer");
 
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Rows")
                         .IsRequired()
                         .HasColumnType("jsonb");
@@ -174,6 +182,8 @@ namespace FinanceTracker.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AccountId");
+
+                    b.HasIndex("OwnerId");
 
                     b.ToTable("ImportJobs", (string)null);
                 });
@@ -199,6 +209,9 @@ namespace FinanceTracker.Infrastructure.Migrations
 
                     b.Property<DateOnly>("OccurredOn")
                         .HasColumnType("date");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -226,6 +239,8 @@ namespace FinanceTracker.Infrastructure.Migrations
                     b.HasIndex("AccountId");
 
                     b.HasIndex("CategoryId");
+
+                    b.HasIndex("OwnerId");
 
                     b.ToTable("Transactions", (string)null);
                 });

@@ -27,7 +27,7 @@ namespace FinanceTracker.Application.Imports.StartImport
             // Checked here too, not only during processing: an unknown or
             // closed Account is something the uploader can be told right
             // away, in the response, instead of only after polling the job.
-            var account = await _accountRepository.GetByIdAsync(request.AccountId, cancellationToken);
+            var account = await _accountRepository.GetByIdAsync(request.OwnerId, request.AccountId, cancellationToken);
 
             if (account is null)
             {
@@ -41,11 +41,11 @@ namespace FinanceTracker.Application.Imports.StartImport
                     "Account.Closed", "Cannot import transactions into a closed account."));
             }
 
-            var importJob = ImportJob.Create(request.AccountId, request.Rows, request.ParseErrors);
+            var importJob = ImportJob.Create(request.OwnerId, request.AccountId, request.Rows, request.ParseErrors);
 
             // Enqueue BEFORE AddAsync, as always: AddAsync's SaveChangesAsync
             // writes the job and its ImportRequested event together (IOutbox).
-            _outbox.Enqueue(new ImportRequested(importJob.Id.Value));
+            _outbox.Enqueue(new ImportRequested(importJob.Id.Value, request.OwnerId.Value));
             await _importJobRepository.AddAsync(importJob, cancellationToken);
 
             return Result.Success(importJob.Id);

@@ -54,12 +54,12 @@ namespace FinanceTracker.Application.Imports.ProcessImport
             // Everything below -- every Transaction, every outbox event, and
             // the job's own status change -- commits together or not at all.
             _unitOfWork.ExecuteAtomicallyAsync(
-                token => ProcessAsync(request.ImportJobId, token), cancellationToken);
+                token => ProcessAsync(request.OwnerId, request.ImportJobId, token), cancellationToken);
 
         private async Task<Result<ProcessImportJobOutcome>> ProcessAsync(
-            ImportJobId importJobId, CancellationToken cancellationToken)
+            UserId ownerId, ImportJobId importJobId, CancellationToken cancellationToken)
         {
-            var importJob = await _importJobRepository.GetByIdAsync(importJobId, cancellationToken);
+            var importJob = await _importJobRepository.GetByIdAsync(ownerId, importJobId, cancellationToken);
 
             if (importJob is null)
                 return Result.Success(ProcessImportJobOutcome.JobNotFound);
@@ -70,7 +70,7 @@ namespace FinanceTracker.Application.Imports.ProcessImport
             if (!importJob.IsPending)
                 return Result.Success(ProcessImportJobOutcome.AlreadyProcessed);
 
-            var account = await _accountRepository.GetByIdAsync(importJob.AccountId, cancellationToken);
+            var account = await _accountRepository.GetByIdAsync(ownerId, importJob.AccountId, cancellationToken);
 
             if (account is null || account.IsClosed)
             {
@@ -93,10 +93,10 @@ namespace FinanceTracker.Application.Imports.ProcessImport
                     var amount = Money.Create(row.Amount, account.Currency);
                     var categoryId = TransactionCategorizer.Categorize(row.Description, rules);
                     var transaction = Transaction.Create(
-                        account.Id, amount, row.Type, row.Description, row.OccurredOn, categoryId);
+                        ownerId, account.Id, amount, row.Type, row.Description, row.OccurredOn, categoryId);
 
                     // Enqueue before AddAsync, per row (IOutbox's ordering rule).
-                    _outbox.Enqueue(new TransactionAdded(transaction.Id.Value));
+                    _outbox.Enqueue(new TransactionAdded(transaction.Id.Value, ownerId.Value));
                     await _transactionRepository.AddAsync(transaction, cancellationToken);
                     importedCount++;
                 }

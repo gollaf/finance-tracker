@@ -7,6 +7,10 @@ namespace FinanceTracker.Application.Imports.GetImportJob
     {
         public GetImportJobQueryValidator()
         {
+            RuleFor(q => q.OwnerId)
+                .NotEqual(default(UserId))
+                .WithMessage("OwnerId is required.");
+
             RuleFor(q => q.ImportJobId)
                 .NotEqual(default(ImportJobId))
                 .WithMessage("ImportJobId is required.");

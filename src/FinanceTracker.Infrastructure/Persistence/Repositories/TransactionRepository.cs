@@ -14,13 +14,13 @@ namespace FinanceTracker.Infrastructure.Persistence.Repositories
             _context = context;
         }
 
-        public Task<Transaction?> GetByIdAsync(TransactionId id, CancellationToken cancellationToken = default) =>
-            _context.Transactions.SingleOrDefaultAsync(t => t.Id == id, cancellationToken);
+        public Task<Transaction?> GetByIdAsync(UserId ownerId, TransactionId id, CancellationToken cancellationToken = default) =>
+            _context.Transactions.SingleOrDefaultAsync(t => t.Id == id && t.OwnerId == ownerId, cancellationToken);
 
         public async Task<IReadOnlyList<Transaction>> GetByAccountIdAsync(
-            AccountId accountId, CancellationToken cancellationToken = default) =>
+            UserId ownerId, AccountId accountId, CancellationToken cancellationToken = default) =>
             await _context.Transactions
-                .Where(t => t.AccountId == accountId)
+                .Where(t => t.AccountId == accountId && t.OwnerId == ownerId)
                 .ToListAsync(cancellationToken);
 
         public async Task<IReadOnlyList<Transaction>> GetByCategoryIdAsync(
@@ -45,10 +45,10 @@ namespace FinanceTracker.Infrastructure.Persistence.Repositories
         // write are atomic. It bypasses the change tracker: an instance this
         // DbContext already loaded still shows the old value.
         public async Task<bool> TrySetCategoryIfUncategorizedAsync(
-            TransactionId transactionId, CategoryId categoryId, CancellationToken cancellationToken = default)
+            UserId ownerId, TransactionId transactionId, CategoryId categoryId, CancellationToken cancellationToken = default)
         {
             var rowsAffected = await _context.Transactions
-                .Where(t => t.Id == transactionId && t.CategoryId == null)
+                .Where(t => t.Id == transactionId && t.OwnerId == ownerId && t.CategoryId == null)
                 .ExecuteUpdateAsync(
                     setters => setters.SetProperty(t => t.CategoryId, (CategoryId?)categoryId),
                     cancellationToken);

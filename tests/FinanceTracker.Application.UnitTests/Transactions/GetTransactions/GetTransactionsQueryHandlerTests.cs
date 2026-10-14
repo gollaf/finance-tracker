@@ -12,27 +12,28 @@ namespace FinanceTracker.Application.UnitTests.Transactions.GetTransactions
 {
     public class GetTransactionsQueryHandlerTests
     {
-        private static Account NewAccount() => Account.Create("Checking", AccountType.Checking, "USD");
+        private static readonly UserId Owner = new(Guid.NewGuid());
+        private static Account NewAccount() => Account.Create(Owner, "Checking", AccountType.Checking, "USD");
 
         [Fact]
         public async Task Handle_WithNoDateFilter_ReturnsAllTransactionsMostRecentFirst()
         {
             var account = NewAccount();
             var older = Transaction.Create(
-                account.Id, Money.Create(10m, "USD"), TransactionType.Expense, "Old", new DateOnly(2026, 1, 1));
+                Owner, account.Id, Money.Create(10m, "USD"), TransactionType.Expense, "Old", new DateOnly(2026, 1, 1));
             var newer = Transaction.Create(
-                account.Id, Money.Create(20m, "USD"), TransactionType.Expense, "New", new DateOnly(2026, 6, 1));
+                Owner, account.Id, Money.Create(20m, "USD"), TransactionType.Expense, "New", new DateOnly(2026, 6, 1));
 
             var accountRepository = Substitute.For<IAccountRepository>();
-            accountRepository.GetByIdAsync(account.Id, Arg.Any<CancellationToken>()).Returns(account);
+            accountRepository.GetByIdAsync(Owner, account.Id, Arg.Any<CancellationToken>()).Returns(account);
 
             var transactionRepository = Substitute.For<ITransactionRepository>();
             transactionRepository
-                .GetByAccountIdAsync(account.Id, Arg.Any<CancellationToken>())
+                .GetByAccountIdAsync(Owner, account.Id, Arg.Any<CancellationToken>())
                 .Returns(new[] { older, newer });
 
             var handler = new GetTransactionsQueryHandler(accountRepository, transactionRepository);
-            var query = new GetTransactionsQuery(account.Id);
+            var query = new GetTransactionsQuery(Owner, account.Id);
 
             var result = await handler.Handle(query, CancellationToken.None);
 
@@ -47,20 +48,20 @@ namespace FinanceTracker.Application.UnitTests.Transactions.GetTransactions
         {
             var account = NewAccount();
             var january = Transaction.Create(
-                account.Id, Money.Create(10m, "USD"), TransactionType.Expense, "January", new DateOnly(2026, 1, 15));
+                Owner, account.Id, Money.Create(10m, "USD"), TransactionType.Expense, "January", new DateOnly(2026, 1, 15));
             var june = Transaction.Create(
-                account.Id, Money.Create(20m, "USD"), TransactionType.Expense, "June", new DateOnly(2026, 6, 15));
+                Owner, account.Id, Money.Create(20m, "USD"), TransactionType.Expense, "June", new DateOnly(2026, 6, 15));
 
             var accountRepository = Substitute.For<IAccountRepository>();
-            accountRepository.GetByIdAsync(account.Id, Arg.Any<CancellationToken>()).Returns(account);
+            accountRepository.GetByIdAsync(Owner, account.Id, Arg.Any<CancellationToken>()).Returns(account);
 
             var transactionRepository = Substitute.For<ITransactionRepository>();
             transactionRepository
-                .GetByAccountIdAsync(account.Id, Arg.Any<CancellationToken>())
+                .GetByAccountIdAsync(Owner, account.Id, Arg.Any<CancellationToken>())
                 .Returns(new[] { january, june });
 
             var handler = new GetTransactionsQueryHandler(accountRepository, transactionRepository);
-            var query = new GetTransactionsQuery(account.Id, new DateOnly(2026, 6, 1), new DateOnly(2026, 6, 30));
+            var query = new GetTransactionsQuery(Owner, account.Id, new DateOnly(2026, 6, 1), new DateOnly(2026, 6, 30));
 
             var result = await handler.Handle(query, CancellationToken.None);
 
@@ -73,13 +74,13 @@ namespace FinanceTracker.Application.UnitTests.Transactions.GetTransactions
         {
             var accountRepository = Substitute.For<IAccountRepository>();
             accountRepository
-                .GetByIdAsync(Arg.Any<AccountId>(), Arg.Any<CancellationToken>())
+                .GetByIdAsync(Owner, Arg.Any<AccountId>(), Arg.Any<CancellationToken>())
                 .Returns((Account?)null);
 
             var transactionRepository = Substitute.For<ITransactionRepository>();
 
             var handler = new GetTransactionsQueryHandler(accountRepository, transactionRepository);
-            var query = new GetTransactionsQuery(AccountId.New());
+            var query = new GetTransactionsQuery(Owner, AccountId.New());
 
             var result = await handler.Handle(query, CancellationToken.None);
 

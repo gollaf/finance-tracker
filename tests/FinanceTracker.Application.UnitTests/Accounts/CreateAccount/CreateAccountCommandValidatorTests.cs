@@ -1,17 +1,19 @@
 using FinanceTracker.Application.Accounts.CreateAccount;
 using FinanceTracker.Domain.Accounts;
+using FinanceTracker.Domain.Common;
 using FluentAssertions;
 
 namespace FinanceTracker.Application.UnitTests.Accounts.CreateAccount
 {
     public class CreateAccountCommandValidatorTests
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
         private readonly CreateAccountCommandValidator _validator = new();
 
         [Fact]
         public void Validate_WithValidCommand_IsValid()
         {
-            var result = _validator.Validate(new CreateAccountCommand("Checking", AccountType.Checking, "USD"));
+            var result = _validator.Validate(new CreateAccountCommand(Owner, "Checking", AccountType.Checking, "USD"));
 
             result.IsValid.Should().BeTrue();
         }
@@ -22,7 +24,7 @@ namespace FinanceTracker.Application.UnitTests.Accounts.CreateAccount
         [InlineData("   ")]
         public void Validate_WithMissingName_IsInvalid(string? name)
         {
-            var result = _validator.Validate(new CreateAccountCommand(name!, AccountType.Checking, "USD"));
+            var result = _validator.Validate(new CreateAccountCommand(Owner, name!, AccountType.Checking, "USD"));
 
             result.IsValid.Should().BeFalse();
             result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateAccountCommand.Name));
@@ -33,7 +35,7 @@ namespace FinanceTracker.Application.UnitTests.Accounts.CreateAccount
         {
             var name = new string('a', Account.MaxNameLength + 1);
 
-            var result = _validator.Validate(new CreateAccountCommand(name, AccountType.Checking, "USD"));
+            var result = _validator.Validate(new CreateAccountCommand(Owner, name, AccountType.Checking, "USD"));
 
             result.IsValid.Should().BeFalse();
             result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateAccountCommand.Name));
@@ -47,7 +49,7 @@ namespace FinanceTracker.Application.UnitTests.Accounts.CreateAccount
         public void Validate_WithInvalidCurrency_IsInvalid(string? currency)
         {
             var result = _validator.Validate(
-                new CreateAccountCommand("Checking", AccountType.Checking, currency!));
+                new CreateAccountCommand(Owner, "Checking", AccountType.Checking, currency!));
 
             result.IsValid.Should().BeFalse();
             result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateAccountCommand.Currency));
@@ -56,10 +58,19 @@ namespace FinanceTracker.Application.UnitTests.Accounts.CreateAccount
         [Fact]
         public void Validate_WithUndefinedAccountType_IsInvalid()
         {
-            var result = _validator.Validate(new CreateAccountCommand("Checking", (AccountType)999, "USD"));
+            var result = _validator.Validate(new CreateAccountCommand(Owner, "Checking", (AccountType)999, "USD"));
 
             result.IsValid.Should().BeFalse();
             result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateAccountCommand.Type));
+        }
+
+        [Fact]
+        public void Validate_WithDefaultOwnerId_IsInvalid()
+        {
+            var result = _validator.Validate(new CreateAccountCommand(Owner, "Checking", AccountType.Checking, "USD") with { OwnerId = default });
+
+            result.IsValid.Should().BeFalse();
+            result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateAccountCommand.OwnerId));
         }
     }
 }

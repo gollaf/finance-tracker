@@ -23,7 +23,8 @@ namespace FinanceTracker.Application.Transactions.CategorizeTransaction
 
         public async Task<Result> Handle(CategorizeTransactionCommand request, CancellationToken cancellationToken)
         {
-            var transaction = await _transactionRepository.GetByIdAsync(request.TransactionId, cancellationToken);
+            var transaction = await _transactionRepository.GetByIdAsync(
+                request.OwnerId, request.TransactionId, cancellationToken);
 
             if (transaction is null)
             {

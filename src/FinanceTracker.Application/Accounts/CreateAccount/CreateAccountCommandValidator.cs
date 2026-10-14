@@ -1,4 +1,5 @@
 using FinanceTracker.Domain.Accounts;
+using FinanceTracker.Domain.Common;
 using FluentValidation;
 
 namespace FinanceTracker.Application.Accounts.CreateAccount
@@ -12,6 +13,10 @@ namespace FinanceTracker.Application.Accounts.CreateAccount
     {
         public CreateAccountCommandValidator()
         {
+            RuleFor(c => c.OwnerId)
+                .NotEqual(default(UserId))
+                .WithMessage("OwnerId is required.");
+
             RuleFor(c => c.Name)
                 .NotEmpty()
                 .MaximumLength(Account.MaxNameLength);

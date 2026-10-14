@@ -11,6 +11,7 @@ namespace FinanceTracker.Application.UnitTests.Imports.GetImportJob
 {
     public class GetImportJobQueryHandlerTests
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
         private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         private readonly IImportJobRepository _importJobRepository = Substitute.For<IImportJobRepository>();
@@ -19,7 +20,7 @@ namespace FinanceTracker.Application.UnitTests.Imports.GetImportJob
         public async Task Handle_WithExistingJob_ReturnsItsOutcomeWithoutTheRawRows()
         {
             var job = ImportJob.Create(
-                AccountId.New(),
+                Owner, AccountId.New(),
                 new[]
                 {
                     new ImportJobRow(2, 4.5m, TransactionType.Expense, "Coffee", Today),
@@ -27,10 +28,10 @@ namespace FinanceTracker.Application.UnitTests.Imports.GetImportJob
                 },
                 new[] { new ImportJobRowError(4, "Invalid amount.") });
             job.Complete(2, Array.Empty<ImportJobRowError>());
-            _importJobRepository.GetByIdAsync(job.Id, Arg.Any<CancellationToken>()).Returns(job);
+            _importJobRepository.GetByIdAsync(Owner, job.Id, Arg.Any<CancellationToken>()).Returns(job);
 
             var result = await new GetImportJobQueryHandler(_importJobRepository)
-                .Handle(new GetImportJobQuery(job.Id), CancellationToken.None);
+                .Handle(new GetImportJobQuery(Owner, job.Id), CancellationToken.None);
 
             result.IsSuccess.Should().BeTrue();
             result.Value.Id.Should().Be(job.Id);
@@ -43,10 +44,10 @@ namespace FinanceTracker.Application.UnitTests.Imports.GetImportJob
         [Fact]
         public async Task Handle_WithUnknownJob_ReturnsNotFound()
         {
-            _importJobRepository.GetByIdAsync(Arg.Any<ImportJobId>(), Arg.Any<CancellationToken>()).Returns((ImportJob?)null);
+            _importJobRepository.GetByIdAsync(Owner, Arg.Any<ImportJobId>(), Arg.Any<CancellationToken>()).Returns((ImportJob?)null);
 
             var result = await new GetImportJobQueryHandler(_importJobRepository)
-                .Handle(new GetImportJobQuery(ImportJobId.New()), CancellationToken.None);
+                .Handle(new GetImportJobQuery(Owner, ImportJobId.New()), CancellationToken.None);
 
             result.IsFailure.Should().BeTrue();
             result.Error.Type.Should().Be(ErrorType.NotFound);

@@ -1,14 +1,17 @@
 using FinanceTracker.Domain.Accounts;
+using FinanceTracker.Domain.Common;
 using FluentAssertions;
 
 namespace FinanceTracker.Domain.UnitTests.Accounts
 {
     public class AccountTests
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
+
         [Fact]
         public void Create_WithValidData_Succeeds()
         {
-            var account = Account.Create("Checking", AccountType.Checking, "USD");
+            var account = Account.Create(Owner, "Checking", AccountType.Checking, "USD");
 
             account.Name.Should().Be("Checking");
             account.Type.Should().Be(AccountType.Checking);
@@ -22,7 +25,7 @@ namespace FinanceTracker.Domain.UnitTests.Accounts
         [InlineData("   ")]
         public void Create_WithMissingName_Throws(string? name)
         {
-            var act = () => Account.Create(name!, AccountType.Checking, "USD");
+            var act = () => Account.Create(Owner, name!, AccountType.Checking, "USD");
 
             act.Should().Throw<ArgumentException>();
         }
@@ -32,7 +35,7 @@ namespace FinanceTracker.Domain.UnitTests.Accounts
         {
             var name = new string('a', Account.MaxNameLength + 1);
 
-            var act = () => Account.Create(name, AccountType.Checking, "USD");
+            var act = () => Account.Create(Owner, name, AccountType.Checking, "USD");
 
             act.Should().Throw<ArgumentException>();
         }
@@ -43,7 +46,7 @@ namespace FinanceTracker.Domain.UnitTests.Accounts
         [InlineData("")]
         public void Create_WithInvalidCurrency_Throws(string currency)
         {
-            var act = () => Account.Create("Checking", AccountType.Checking, currency);
+            var act = () => Account.Create(Owner, "Checking", AccountType.Checking, currency);
 
             act.Should().Throw<ArgumentException>();
         }
@@ -51,7 +54,7 @@ namespace FinanceTracker.Domain.UnitTests.Accounts
         [Fact]
         public void Rename_WithValidName_UpdatesName()
         {
-            var account = Account.Create("Checking", AccountType.Checking, "USD");
+            var account = Account.Create(Owner, "Checking", AccountType.Checking, "USD");
 
             account.Rename("Everyday Checking");
 
@@ -61,7 +64,7 @@ namespace FinanceTracker.Domain.UnitTests.Accounts
         [Fact]
         public void Rename_WhenClosed_Throws()
         {
-            var account = Account.Create("Checking", AccountType.Checking, "USD");
+            var account = Account.Create(Owner, "Checking", AccountType.Checking, "USD");
             account.Close();
 
             var act = () => account.Rename("New Name");
@@ -72,7 +75,7 @@ namespace FinanceTracker.Domain.UnitTests.Accounts
         [Fact]
         public void Close_MarksAccountClosed()
         {
-            var account = Account.Create("Checking", AccountType.Checking, "USD");
+            var account = Account.Create(Owner, "Checking", AccountType.Checking, "USD");
 
             account.Close();
 
@@ -82,12 +85,28 @@ namespace FinanceTracker.Domain.UnitTests.Accounts
         [Fact]
         public void Close_WhenAlreadyClosed_Throws()
         {
-            var account = Account.Create("Checking", AccountType.Checking, "USD");
+            var account = Account.Create(Owner, "Checking", AccountType.Checking, "USD");
             account.Close();
 
             var act = () => account.Close();
 
             act.Should().Throw<InvalidOperationException>();
+        }
+
+        [Fact]
+        public void Create_StoresTheOwner()
+        {
+            var account = Account.Create(Owner, "Checking", AccountType.Checking, "USD");
+
+            account.OwnerId.Should().Be(Owner);
+        }
+
+        [Fact]
+        public void Create_WithoutOwner_Throws()
+        {
+            var act = () => Account.Create(default, "Checking", AccountType.Checking, "USD");
+
+            act.Should().Throw<ArgumentException>();
         }
     }
 }

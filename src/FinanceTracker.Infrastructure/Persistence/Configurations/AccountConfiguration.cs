@@ -23,6 +23,13 @@ namespace FinanceTracker.Infrastructure.Persistence.Configurations
                 .HasConversion(new StronglyTypedIdValueConverter<AccountId>(id => id.Value, value => new AccountId(value)))
                 .ValueGeneratedNever();
 
+            builder.Property(a => a.OwnerId)
+                .HasConversion(new StronglyTypedIdValueConverter<UserId>(id => id.Value, value => new UserId(value)))
+                .IsRequired();
+
+            // Every lookup filters on the owner.
+            builder.HasIndex(a => a.OwnerId);
+
             builder.Property(a => a.Name)
                 .IsRequired()
                 .HasMaxLength(Account.MaxNameLength);

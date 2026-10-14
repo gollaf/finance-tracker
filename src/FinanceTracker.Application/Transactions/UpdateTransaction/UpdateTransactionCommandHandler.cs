@@ -20,7 +20,8 @@ namespace FinanceTracker.Application.Transactions.UpdateTransaction
 
         public async Task<Result> Handle(UpdateTransactionCommand request, CancellationToken cancellationToken)
         {
-            var transaction = await _transactionRepository.GetByIdAsync(request.TransactionId, cancellationToken);
+            var transaction = await _transactionRepository.GetByIdAsync(
+                request.OwnerId, request.TransactionId, cancellationToken);
 
             if (transaction is null)
             {

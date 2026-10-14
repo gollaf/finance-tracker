@@ -15,6 +15,7 @@ namespace FinanceTracker.Application.UnitTests.Imports.StartImport
 {
     public class StartImportCommandHandlerTests
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
         private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         private readonly IAccountRepository _accountRepository = Substitute.For<IAccountRepository>();
@@ -25,6 +26,7 @@ namespace FinanceTracker.Application.UnitTests.Imports.StartImport
 
         private static StartImportCommand NewCommand(AccountId accountId) =>
             new(
+                Owner,
                 accountId,
                 new[]
                 {
@@ -36,8 +38,8 @@ namespace FinanceTracker.Application.UnitTests.Imports.StartImport
         [Fact]
         public async Task Handle_WithOpenAccount_CreatesAPendingJobAndRequestsItsProcessing()
         {
-            var account = Account.Create("Checking", AccountType.Checking, "USD");
-            _accountRepository.GetByIdAsync(account.Id, Arg.Any<CancellationToken>()).Returns(account);
+            var account = Account.Create(Owner, "Checking", AccountType.Checking, "USD");
+            _accountRepository.GetByIdAsync(Owner, account.Id, Arg.Any<CancellationToken>()).Returns(account);
 
             var result = await NewHandler().Handle(NewCommand(account.Id), CancellationToken.None);
 
@@ -47,6 +49,7 @@ namespace FinanceTracker.Application.UnitTests.Imports.StartImport
             await _importJobRepository.Received(1).AddAsync(
                 Arg.Is<ImportJob>(j =>
                     j.Id == jobId
+                    && j.OwnerId == Owner
                     && j.AccountId == account.Id
                     && j.Status == ImportJobStatus.Pending
                     && j.Rows.Count == 2
@@ -56,7 +59,7 @@ namespace FinanceTracker.Application.UnitTests.Imports.StartImport
             // Staged before the save that writes it (IOutbox's ordering rule).
             Received.InOrder(() =>
             {
-                _outbox.Enqueue(Arg.Is<ImportRequested>(e => e.ImportJobId == jobId.Value));
+                _outbox.Enqueue(Arg.Is<ImportRequested>(e => e.ImportJobId == jobId.Value && e.OwnerId == Owner.Value));
                 _ = _importJobRepository.AddAsync(Arg.Any<ImportJob>(), Arg.Any<CancellationToken>());
             });
         }
@@ -64,7 +67,7 @@ namespace FinanceTracker.Application.UnitTests.Imports.StartImport
         [Fact]
         public async Task Handle_WithUnknownAccount_ReturnsNotFoundAndCreatesNothing()
         {
-            _accountRepository.GetByIdAsync(Arg.Any<AccountId>(), Arg.Any<CancellationToken>()).Returns((Account?)null);
+            _accountRepository.GetByIdAsync(Owner, Arg.Any<AccountId>(), Arg.Any<CancellationToken>()).Returns((Account?)null);
 
             var result = await NewHandler().Handle(NewCommand(AccountId.New()), CancellationToken.None);
 
@@ -77,9 +80,9 @@ namespace FinanceTracker.Application.UnitTests.Imports.StartImport
         [Fact]
         public async Task Handle_WithClosedAccount_ReturnsConflictAndCreatesNothing()
         {
-            var account = Account.Create("Checking", AccountType.Checking, "USD");
+            var account = Account.Create(Owner, "Checking", AccountType.Checking, "USD");
             account.Close();
-            _accountRepository.GetByIdAsync(account.Id, Arg.Any<CancellationToken>()).Returns(account);
+            _accountRepository.GetByIdAsync(Owner, account.Id, Arg.Any<CancellationToken>()).Returns(account);
 
             var result = await NewHandler().Handle(NewCommand(account.Id), CancellationToken.None);
 

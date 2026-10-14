@@ -31,6 +31,9 @@ namespace FinanceTracker.Worker.IntegrationTests
     {
         protected static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
 
+        /// <summary>Owns everything a test creates; no user row is needed for that.</summary>
+        protected static readonly UserId Owner = new(Guid.NewGuid());
+
         private const string RabbitMqUser = "financetracker";
         private const string RabbitMqPassword = "financetracker";
         private static readonly TimeSpan WaitTimeout = TimeSpan.FromSeconds(30);
@@ -154,7 +157,7 @@ namespace FinanceTracker.Worker.IntegrationTests
         {
             await using var scope = _host.Services.CreateAsyncScope();
             var transaction = await scope.ServiceProvider.GetRequiredService<ITransactionRepository>()
-                .GetByIdAsync(transactionId);
+                .GetByIdAsync(Owner, transactionId);
 
             return transaction?.CategoryId;
         }
@@ -163,7 +166,7 @@ namespace FinanceTracker.Worker.IntegrationTests
         {
             await using var scope = _host.Services.CreateAsyncScope();
             return await scope.ServiceProvider.GetRequiredService<ITransactionRepository>()
-                .GetByAccountIdAsync(accountId);
+                .GetByAccountIdAsync(Owner, accountId);
         }
 
         /// <summary>Polls until the Transaction has a Category, or the timeout passes.</summary>
@@ -227,7 +230,7 @@ namespace FinanceTracker.Worker.IntegrationTests
                 await using (var scope = _host.Services.CreateAsyncScope())
                 {
                     var job = await scope.ServiceProvider.GetRequiredService<IImportJobRepository>()
-                        .GetByIdAsync(importJobId);
+                        .GetByIdAsync(Owner, importJobId);
 
                     if (job is { IsPending: false } || DateTime.UtcNow >= deadline)
                     {

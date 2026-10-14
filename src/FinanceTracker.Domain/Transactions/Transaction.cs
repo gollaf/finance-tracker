@@ -13,6 +13,9 @@ namespace FinanceTracker.Domain.Transactions
 
         public TransactionId Id { get; }
 
+        /// <summary>Always the owner of the Account; copied so every lookup can filter on it directly.</summary>
+        public UserId OwnerId { get; }
+
         public AccountId AccountId { get; }
 
         public CategoryId? CategoryId { get; private set; }
@@ -29,6 +32,7 @@ namespace FinanceTracker.Domain.Transactions
 
         private Transaction(
             TransactionId id,
+            UserId ownerId,
             AccountId accountId,
             Money amount,
             TransactionType type,
@@ -38,6 +42,7 @@ namespace FinanceTracker.Domain.Transactions
             DateTimeOffset createdAt)
         {
             Id = id;
+            OwnerId = ownerId;
             AccountId = accountId;
             Amount = amount;
             Type = type;
@@ -52,6 +57,7 @@ namespace FinanceTracker.Domain.Transactions
         // sets it afterwards.
         private Transaction(
             TransactionId id,
+            UserId ownerId,
             AccountId accountId,
             TransactionType type,
             string description,
@@ -60,6 +66,7 @@ namespace FinanceTracker.Domain.Transactions
             DateTimeOffset createdAt)
         {
             Id = id;
+            OwnerId = ownerId;
             AccountId = accountId;
             Type = type;
             Description = description;
@@ -70,6 +77,7 @@ namespace FinanceTracker.Domain.Transactions
         }
 
         public static Transaction Create(
+            UserId ownerId,
             AccountId accountId,
             Money amount,
             TransactionType type,
@@ -80,12 +88,16 @@ namespace FinanceTracker.Domain.Transactions
         {
             var effectiveCreatedAt = createdAt ?? DateTimeOffset.UtcNow;
 
+            if (ownerId == default)
+                throw new ArgumentException("A transaction must have an owner.", nameof(ownerId));
+
             ValidateAmount(amount);
             ValidateDescription(description);
             ValidateOccurredOn(occurredOn, effectiveCreatedAt);
 
             return new Transaction(
                 TransactionId.New(),
+                ownerId,
                 accountId,
                 amount,
                 type,

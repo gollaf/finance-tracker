@@ -14,6 +14,10 @@ namespace FinanceTracker.Application.Transactions.AddTransaction
     {
         public AddTransactionCommandValidator()
         {
+            RuleFor(c => c.OwnerId)
+                .NotEqual(default(UserId))
+                .WithMessage("OwnerId is required.");
+
             RuleFor(c => c.AccountId)
                 .NotEqual(default(AccountId))
                 .WithMessage("AccountId is required.");

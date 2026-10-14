@@ -12,6 +12,7 @@ namespace FinanceTracker.Application.Transactions.UpdateTransaction
     /// touched here either — that's CategorizeTransaction's job.
     /// </summary>
     public sealed record UpdateTransactionCommand(
+        UserId OwnerId,
         TransactionId TransactionId,
         decimal Amount,
         string Description,

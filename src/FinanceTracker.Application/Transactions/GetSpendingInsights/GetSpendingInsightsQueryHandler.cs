@@ -39,7 +39,7 @@ namespace FinanceTracker.Application.Transactions.GetSpendingInsights
         public async Task<Result<SpendingInsightsDto>> Handle(
             GetSpendingInsightsQuery request, CancellationToken cancellationToken)
         {
-            var account = await _accountRepository.GetByIdAsync(request.AccountId, cancellationToken);
+            var account = await _accountRepository.GetByIdAsync(request.OwnerId, request.AccountId, cancellationToken);
 
             if (account is null)
             {
@@ -56,7 +56,8 @@ namespace FinanceTracker.Application.Transactions.GetSpendingInsights
             var currentMonthEndExclusive = currentMonthStart.AddMonths(1);
             var priorWindowStart = currentMonthStart.AddMonths(-3);
 
-            var transactions = await _transactionRepository.GetByAccountIdAsync(request.AccountId, cancellationToken);
+            var transactions = await _transactionRepository.GetByAccountIdAsync(
+                request.OwnerId, request.AccountId, cancellationToken);
 
             // A list of pairs, not a Dictionary: uncategorized spending has a
             // null CategoryId, and Dictionary rejects null keys.

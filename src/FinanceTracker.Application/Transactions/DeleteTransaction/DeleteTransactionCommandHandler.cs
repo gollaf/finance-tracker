@@ -19,7 +19,8 @@ namespace FinanceTracker.Application.Transactions.DeleteTransaction
 
         public async Task<Result> Handle(DeleteTransactionCommand request, CancellationToken cancellationToken)
         {
-            var transaction = await _transactionRepository.GetByIdAsync(request.TransactionId, cancellationToken);
+            var transaction = await _transactionRepository.GetByIdAsync(
+                request.OwnerId, request.TransactionId, cancellationToken);
 
             if (transaction is null)
             {

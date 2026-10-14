@@ -23,7 +23,7 @@ namespace FinanceTracker.Application.Accounts.CreateAccount
 
         public async Task<Result<AccountId>> Handle(CreateAccountCommand request, CancellationToken cancellationToken)
         {
-            var account = Account.Create(request.Name, request.Type, request.Currency);
+            var account = Account.Create(request.OwnerId, request.Name, request.Type, request.Currency);
 
             await _accountRepository.AddAsync(account, cancellationToken);
 

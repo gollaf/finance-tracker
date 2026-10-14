@@ -6,6 +6,7 @@ namespace FinanceTracker.Domain.UnitTests.Transactions
 {
     public class TransactionTests
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
         private static readonly AccountId SampleAccountId = AccountId.New();
         private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
 
@@ -13,7 +14,7 @@ namespace FinanceTracker.Domain.UnitTests.Transactions
         public void Create_WithValidData_Succeeds()
         {
             var transaction = Transaction.Create(
-                SampleAccountId,
+                Owner, SampleAccountId,
                 Money.Create(50m, "USD"),
                 TransactionType.Expense,
                 "Groceries",
@@ -31,7 +32,7 @@ namespace FinanceTracker.Domain.UnitTests.Transactions
         public void Create_WithZeroAmount_Throws()
         {
             var act = () => Transaction.Create(
-                SampleAccountId, Money.Create(0m, "USD"), TransactionType.Expense, "Groceries", Today);
+                Owner, SampleAccountId, Money.Create(0m, "USD"), TransactionType.Expense, "Groceries", Today);
 
             act.Should().Throw<ArgumentException>();
         }
@@ -40,7 +41,7 @@ namespace FinanceTracker.Domain.UnitTests.Transactions
         public void Create_WithNegativeAmount_Throws()
         {
             var act = () => Transaction.Create(
-                SampleAccountId, Money.Create(-10m, "USD"), TransactionType.Expense, "Groceries", Today);
+                Owner, SampleAccountId, Money.Create(-10m, "USD"), TransactionType.Expense, "Groceries", Today);
 
             act.Should().Throw<ArgumentException>();
         }
@@ -52,7 +53,7 @@ namespace FinanceTracker.Domain.UnitTests.Transactions
         public void Create_WithMissingDescription_Throws(string? description)
         {
             var act = () => Transaction.Create(
-                SampleAccountId, Money.Create(10m, "USD"), TransactionType.Expense, description!, Today);
+                Owner, SampleAccountId, Money.Create(10m, "USD"), TransactionType.Expense, description!, Today);
 
             act.Should().Throw<ArgumentException>();
         }
@@ -63,7 +64,7 @@ namespace FinanceTracker.Domain.UnitTests.Transactions
             var future = Today.AddDays(1);
 
             var act = () => Transaction.Create(
-                SampleAccountId, Money.Create(10m, "USD"), TransactionType.Expense, "Groceries", future);
+                Owner, SampleAccountId, Money.Create(10m, "USD"), TransactionType.Expense, "Groceries", future);
 
             act.Should().Throw<ArgumentException>();
         }
@@ -72,7 +73,7 @@ namespace FinanceTracker.Domain.UnitTests.Transactions
         public void SignedAmount_ForExpense_IsNegative()
         {
             var transaction = Transaction.Create(
-                SampleAccountId, Money.Create(50m, "USD"), TransactionType.Expense, "Groceries", Today);
+                Owner, SampleAccountId, Money.Create(50m, "USD"), TransactionType.Expense, "Groceries", Today);
 
             transaction.SignedAmount.Should().Be(Money.Create(-50m, "USD"));
         }
@@ -81,7 +82,7 @@ namespace FinanceTracker.Domain.UnitTests.Transactions
         public void SignedAmount_ForIncome_IsPositive()
         {
             var transaction = Transaction.Create(
-                SampleAccountId, Money.Create(50m, "USD"), TransactionType.Income, "Paycheck", Today);
+                Owner, SampleAccountId, Money.Create(50m, "USD"), TransactionType.Income, "Paycheck", Today);
 
             transaction.SignedAmount.Should().Be(Money.Create(50m, "USD"));
         }
@@ -90,7 +91,7 @@ namespace FinanceTracker.Domain.UnitTests.Transactions
         public void Recategorize_SetsCategoryId()
         {
             var transaction = Transaction.Create(
-                SampleAccountId, Money.Create(50m, "USD"), TransactionType.Expense, "Groceries", Today);
+                Owner, SampleAccountId, Money.Create(50m, "USD"), TransactionType.Expense, "Groceries", Today);
             var categoryId = CategoryId.New();
 
             transaction.Recategorize(categoryId);
@@ -102,7 +103,7 @@ namespace FinanceTracker.Domain.UnitTests.Transactions
         public void Recategorize_WithNull_ClearsCategory()
         {
             var transaction = Transaction.Create(
-                SampleAccountId, Money.Create(50m, "USD"), TransactionType.Expense, "Groceries", Today,
+                Owner, SampleAccountId, Money.Create(50m, "USD"), TransactionType.Expense, "Groceries", Today,
                 CategoryId.New());
 
             transaction.Recategorize(null);
@@ -114,7 +115,7 @@ namespace FinanceTracker.Domain.UnitTests.Transactions
         public void UpdateAmount_WithValidAmount_UpdatesAmount()
         {
             var transaction = Transaction.Create(
-                SampleAccountId, Money.Create(50m, "USD"), TransactionType.Expense, "Groceries", Today);
+                Owner, SampleAccountId, Money.Create(50m, "USD"), TransactionType.Expense, "Groceries", Today);
 
             transaction.UpdateAmount(Money.Create(75m, "USD"));
 
@@ -125,7 +126,7 @@ namespace FinanceTracker.Domain.UnitTests.Transactions
         public void UpdateAmount_WithZero_Throws()
         {
             var transaction = Transaction.Create(
-                SampleAccountId, Money.Create(50m, "USD"), TransactionType.Expense, "Groceries", Today);
+                Owner, SampleAccountId, Money.Create(50m, "USD"), TransactionType.Expense, "Groceries", Today);
 
             var act = () => transaction.UpdateAmount(Money.Create(0m, "USD"));
 
@@ -136,7 +137,7 @@ namespace FinanceTracker.Domain.UnitTests.Transactions
         public void UpdateDescription_WithValidText_UpdatesDescription()
         {
             var transaction = Transaction.Create(
-                SampleAccountId, Money.Create(50m, "USD"), TransactionType.Expense, "Groceries", Today);
+                Owner, SampleAccountId, Money.Create(50m, "USD"), TransactionType.Expense, "Groceries", Today);
 
             transaction.UpdateDescription("Weekly groceries");
 
@@ -147,7 +148,7 @@ namespace FinanceTracker.Domain.UnitTests.Transactions
         public void UpdateOccurredOn_WithFutureDate_Throws()
         {
             var transaction = Transaction.Create(
-                SampleAccountId, Money.Create(50m, "USD"), TransactionType.Expense, "Groceries", Today);
+                Owner, SampleAccountId, Money.Create(50m, "USD"), TransactionType.Expense, "Groceries", Today);
 
             var act = () => transaction.UpdateOccurredOn(Today.AddDays(1));
 
@@ -158,12 +159,30 @@ namespace FinanceTracker.Domain.UnitTests.Transactions
         public void UpdateOccurredOn_WithPastDate_Updates()
         {
             var transaction = Transaction.Create(
-                SampleAccountId, Money.Create(50m, "USD"), TransactionType.Expense, "Groceries", Today);
+                Owner, SampleAccountId, Money.Create(50m, "USD"), TransactionType.Expense, "Groceries", Today);
             var pastDate = Today.AddDays(-3);
 
             transaction.UpdateOccurredOn(pastDate);
 
             transaction.OccurredOn.Should().Be(pastDate);
+        }
+
+        [Fact]
+        public void Create_StoresTheOwner()
+        {
+            var transaction = Transaction.Create(
+                Owner, SampleAccountId, Money.Create(50m, "USD"), TransactionType.Expense, "Groceries", Today);
+
+            transaction.OwnerId.Should().Be(Owner);
+        }
+
+        [Fact]
+        public void Create_WithoutOwner_Throws()
+        {
+            var act = () => Transaction.Create(
+                default, SampleAccountId, Money.Create(50m, "USD"), TransactionType.Expense, "Groceries", Today);
+
+            act.Should().Throw<ArgumentException>();
         }
     }
 }

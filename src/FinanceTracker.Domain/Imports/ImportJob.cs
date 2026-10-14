@@ -20,6 +20,8 @@ namespace FinanceTracker.Domain.Imports
 
         public ImportJobId Id { get; }
 
+        public UserId OwnerId { get; }
+
         public AccountId AccountId { get; }
 
         public ImportJobStatus Status { get; private set; }
@@ -44,9 +46,10 @@ namespace FinanceTracker.Domain.Imports
 
         public bool IsPending => Status == ImportJobStatus.Pending;
 
-        private ImportJob(ImportJobId id, AccountId accountId, DateTimeOffset createdAt)
+        private ImportJob(ImportJobId id, UserId ownerId, AccountId accountId, DateTimeOffset createdAt)
         {
             Id = id;
+            OwnerId = ownerId;
             AccountId = accountId;
             CreatedAt = createdAt;
             Status = ImportJobStatus.Pending;
@@ -57,6 +60,7 @@ namespace FinanceTracker.Domain.Imports
         /// <param name="rows">The rows that parsed successfully -- at least one.</param>
         /// <param name="parseErrors">Rows the file parser already rejected; reported as-is at the end.</param>
         public static ImportJob Create(
+            UserId ownerId,
             AccountId accountId,
             IEnumerable<ImportJobRow> rows,
             IEnumerable<ImportJobRowError> parseErrors,
@@ -64,6 +68,9 @@ namespace FinanceTracker.Domain.Imports
         {
             ArgumentNullException.ThrowIfNull(rows);
             ArgumentNullException.ThrowIfNull(parseErrors);
+
+            if (ownerId == default)
+                throw new ArgumentException("An import job must have an owner.", nameof(ownerId));
 
             var rowList = rows.ToList();
 
@@ -73,7 +80,7 @@ namespace FinanceTracker.Domain.Imports
             if (rowList.Count > MaxRows)
                 throw new ArgumentException($"An import job cannot contain more than {MaxRows} rows.", nameof(rows));
 
-            return new ImportJob(ImportJobId.New(), accountId, createdAt ?? DateTimeOffset.UtcNow)
+            return new ImportJob(ImportJobId.New(), ownerId, accountId, createdAt ?? DateTimeOffset.UtcNow)
             {
                 Rows = rowList,
                 Errors = parseErrors.OrderBy(e => e.RowNumber).ToList(),

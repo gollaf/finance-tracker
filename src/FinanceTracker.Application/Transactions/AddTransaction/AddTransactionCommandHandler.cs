@@ -25,7 +25,7 @@ namespace FinanceTracker.Application.Transactions.AddTransaction
         public async Task<Result<TransactionId>> Handle(
             AddTransactionCommand request, CancellationToken cancellationToken)
         {
-            var account = await _accountRepository.GetByIdAsync(request.AccountId, cancellationToken);
+            var account = await _accountRepository.GetByIdAsync(request.OwnerId, request.AccountId, cancellationToken);
 
             if (account is null)
             {
@@ -41,11 +41,11 @@ namespace FinanceTracker.Application.Transactions.AddTransaction
 
             var amount = Money.Create(request.Amount, account.Currency);
             var transaction = Transaction.Create(
-                request.AccountId, amount, request.Type, request.Description, request.OccurredOn);
+                request.OwnerId, request.AccountId, amount, request.Type, request.Description, request.OccurredOn);
 
             // Enqueue BEFORE AddAsync: AddAsync's save writes the outbox row
             // in the same database transaction (see IOutbox).
-            _outbox.Enqueue(new TransactionAdded(transaction.Id.Value));
+            _outbox.Enqueue(new TransactionAdded(transaction.Id.Value, request.OwnerId.Value));
             await _transactionRepository.AddAsync(transaction, cancellationToken);
 
             return Result.Success(transaction.Id);
