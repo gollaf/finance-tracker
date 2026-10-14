@@ -40,7 +40,8 @@ namespace FinanceTracker.Worker.Consumers
             var sender = services.GetRequiredService<ISender>();
 
             var result = await sender.Send(
-                new ProcessImportJobCommand(new ImportJobId(message.ImportJobId)), cancellationToken);
+                new ProcessImportJobCommand(new UserId(message.OwnerId), new ImportJobId(message.ImportJobId)),
+                cancellationToken);
 
             // Expected situations are successful outcomes, so a failure means
             // a malformed message: throw so it ends up in the dead-letter queue.

@@ -12,6 +12,6 @@ namespace FinanceTracker.Application.Imports.ProcessImport
     /// in response to an ImportRequested event. See
     /// docs/adr/0016-asynchronous-csv-import.md.
     /// </summary>
-    public sealed record ProcessImportJobCommand(ImportJobId ImportJobId)
+    public sealed record ProcessImportJobCommand(UserId OwnerId, ImportJobId ImportJobId)
         : IRequest<Result<ProcessImportJobOutcome>>;
 }

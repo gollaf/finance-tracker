@@ -6,6 +6,6 @@ using MediatR;
 namespace FinanceTracker.Application.Accounts.CreateAccount
 {
     /// <summary>Creates a new Account. Returns the new AccountId on success.</summary>
-    public sealed record CreateAccountCommand(string Name, AccountType Type, string Currency)
+    public sealed record CreateAccountCommand(UserId OwnerId, string Name, AccountType Type, string Currency)
         : IRequest<Result<AccountId>>;
 }

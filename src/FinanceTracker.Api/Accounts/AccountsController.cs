@@ -21,7 +21,7 @@ namespace FinanceTracker.Api.Accounts
         [HttpPost]
         public async Task<IActionResult> Create(CreateAccountRequest request, CancellationToken cancellationToken)
         {
-            var command = new CreateAccountCommand(request.Name, request.Type, request.Currency);
+            var command = new CreateAccountCommand(User.GetUserId(), request.Name, request.Type, request.Currency);
             var result = await _sender.Send(command, cancellationToken);
 
             if (result.IsFailure)
@@ -37,7 +37,7 @@ namespace FinanceTracker.Api.Accounts
         [HttpGet("{id:guid}/balance")]
         public async Task<IActionResult> GetBalance(Guid id, CancellationToken cancellationToken)
         {
-            var query = new GetAccountBalanceQuery(new AccountId(id));
+            var query = new GetAccountBalanceQuery(User.GetUserId(), new AccountId(id));
             var result = await _sender.Send(query, cancellationToken);
 
             if (result.IsFailure)

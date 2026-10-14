@@ -25,7 +25,8 @@ namespace FinanceTracker.Api.Imports
         [HttpGet("{id:guid}")]
         public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
         {
-            var result = await _sender.Send(new GetImportJobQuery(new ImportJobId(id)), cancellationToken);
+            var result = await _sender.Send(
+                new GetImportJobQuery(User.GetUserId(), new ImportJobId(id)), cancellationToken);
 
             if (result.IsFailure)
                 return result.ToActionResult();

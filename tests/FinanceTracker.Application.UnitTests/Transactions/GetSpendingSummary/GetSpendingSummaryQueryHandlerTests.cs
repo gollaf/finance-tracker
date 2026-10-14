@@ -12,7 +12,8 @@ namespace FinanceTracker.Application.UnitTests.Transactions.GetSpendingSummary
 {
     public class GetSpendingSummaryQueryHandlerTests
     {
-        private static Account NewAccount() => Account.Create("Checking", AccountType.Checking, "USD");
+        private static readonly UserId Owner = new(Guid.NewGuid());
+        private static Account NewAccount() => Account.Create(Owner, "Checking", AccountType.Checking, "USD");
 
         [Fact]
         public async Task Handle_GroupsExpensesByCategoryWithinPeriod()
@@ -24,32 +25,32 @@ namespace FinanceTracker.Application.UnitTests.Transactions.GetSpendingSummary
             var transactions = new[]
             {
                 Transaction.Create(
-                    account.Id, Money.Create(30m, "USD"), TransactionType.Expense, "Store",
+                    Owner, account.Id, Money.Create(30m, "USD"), TransactionType.Expense, "Store",
                     new DateOnly(2026, 6, 5), groceries),
                 Transaction.Create(
-                    account.Id, Money.Create(20m, "USD"), TransactionType.Expense, "Market",
+                    Owner, account.Id, Money.Create(20m, "USD"), TransactionType.Expense, "Market",
                     new DateOnly(2026, 6, 10), groceries),
                 Transaction.Create(
-                    account.Id, Money.Create(15m, "USD"), TransactionType.Expense, "Cafe",
+                    Owner, account.Id, Money.Create(15m, "USD"), TransactionType.Expense, "Cafe",
                     new DateOnly(2026, 6, 15), dining),
                 Transaction.Create(
-                    account.Id, Money.Create(500m, "USD"), TransactionType.Income, "Salary",
+                    Owner, account.Id, Money.Create(500m, "USD"), TransactionType.Income, "Salary",
                     new DateOnly(2026, 6, 1)),
                 Transaction.Create(
-                    account.Id, Money.Create(999m, "USD"), TransactionType.Expense, "Outside period",
+                    Owner, account.Id, Money.Create(999m, "USD"), TransactionType.Expense, "Outside period",
                     new DateOnly(2026, 5, 30), groceries),
             };
 
             var accountRepository = Substitute.For<IAccountRepository>();
-            accountRepository.GetByIdAsync(account.Id, Arg.Any<CancellationToken>()).Returns(account);
+            accountRepository.GetByIdAsync(Owner, account.Id, Arg.Any<CancellationToken>()).Returns(account);
 
             var transactionRepository = Substitute.For<ITransactionRepository>();
             transactionRepository
-                .GetByAccountIdAsync(account.Id, Arg.Any<CancellationToken>())
+                .GetByAccountIdAsync(Owner, account.Id, Arg.Any<CancellationToken>())
                 .Returns(transactions);
 
             var handler = new GetSpendingSummaryQueryHandler(accountRepository, transactionRepository);
-            var query = new GetSpendingSummaryQuery(account.Id, 2026, 6);
+            var query = new GetSpendingSummaryQuery(Owner, account.Id, 2026, 6);
 
             var result = await handler.Handle(query, CancellationToken.None);
 
@@ -66,18 +67,18 @@ namespace FinanceTracker.Application.UnitTests.Transactions.GetSpendingSummary
         {
             var account = NewAccount();
             var transaction = Transaction.Create(
-                account.Id, Money.Create(10m, "USD"), TransactionType.Expense, "Misc", new DateOnly(2026, 6, 1));
+                Owner, account.Id, Money.Create(10m, "USD"), TransactionType.Expense, "Misc", new DateOnly(2026, 6, 1));
 
             var accountRepository = Substitute.For<IAccountRepository>();
-            accountRepository.GetByIdAsync(account.Id, Arg.Any<CancellationToken>()).Returns(account);
+            accountRepository.GetByIdAsync(Owner, account.Id, Arg.Any<CancellationToken>()).Returns(account);
 
             var transactionRepository = Substitute.For<ITransactionRepository>();
             transactionRepository
-                .GetByAccountIdAsync(account.Id, Arg.Any<CancellationToken>())
+                .GetByAccountIdAsync(Owner, account.Id, Arg.Any<CancellationToken>())
                 .Returns(new[] { transaction });
 
             var handler = new GetSpendingSummaryQueryHandler(accountRepository, transactionRepository);
-            var query = new GetSpendingSummaryQuery(account.Id, 2026, 6);
+            var query = new GetSpendingSummaryQuery(Owner, account.Id, 2026, 6);
 
             var result = await handler.Handle(query, CancellationToken.None);
 
@@ -90,13 +91,13 @@ namespace FinanceTracker.Application.UnitTests.Transactions.GetSpendingSummary
         {
             var accountRepository = Substitute.For<IAccountRepository>();
             accountRepository
-                .GetByIdAsync(Arg.Any<AccountId>(), Arg.Any<CancellationToken>())
+                .GetByIdAsync(Owner, Arg.Any<AccountId>(), Arg.Any<CancellationToken>())
                 .Returns((Account?)null);
 
             var transactionRepository = Substitute.For<ITransactionRepository>();
 
             var handler = new GetSpendingSummaryQueryHandler(accountRepository, transactionRepository);
-            var query = new GetSpendingSummaryQuery(AccountId.New(), 2026, 6);
+            var query = new GetSpendingSummaryQuery(Owner, AccountId.New(), 2026, 6);
 
             var result = await handler.Handle(query, CancellationToken.None);
 

@@ -14,8 +14,8 @@ namespace FinanceTracker.Infrastructure.Persistence.Repositories
             _context = context;
         }
 
-        public Task<Account?> GetByIdAsync(AccountId id, CancellationToken cancellationToken = default) =>
-            _context.Accounts.SingleOrDefaultAsync(a => a.Id == id, cancellationToken);
+        public Task<Account?> GetByIdAsync(UserId ownerId, AccountId id, CancellationToken cancellationToken = default) =>
+            _context.Accounts.SingleOrDefaultAsync(a => a.Id == id && a.OwnerId == ownerId, cancellationToken);
 
         public async Task AddAsync(Account account, CancellationToken cancellationToken = default)
         {

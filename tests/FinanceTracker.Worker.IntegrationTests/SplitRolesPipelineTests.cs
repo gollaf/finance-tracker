@@ -29,11 +29,11 @@ namespace FinanceTracker.Worker.IntegrationTests
         [Fact]
         public async Task EventPublishedWhileNoConsumerRuns_IsHandledOnceAConsumerOnlyWorkerStarts()
         {
-            var accountId = await SendAsync(new CreateAccountCommand("Checking", AccountType.Checking, "USD"));
+            var accountId = await SendAsync(new CreateAccountCommand(Owner, "Checking", AccountType.Checking, "USD"));
             var transportId = await SendAsync(new CreateCategoryCommand("Transport"));
 
             var transactionId = await SendAsync(
-                new AddTransactionCommand(accountId, 18m, TransactionType.Expense, "UBER *TRIP", Today));
+                new AddTransactionCommand(Owner, accountId, 18m, TransactionType.Expense, "UBER *TRIP", Today));
 
             // The relay-only Worker publishes the TransactionAdded event. It
             // can only count as published if its queue already exists.

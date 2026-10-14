@@ -13,6 +13,8 @@ namespace FinanceTracker.Domain.Accounts
 
         public AccountId Id { get; }
 
+        public UserId OwnerId { get; }
+
         public string Name { get; private set; }
 
         public AccountType Type { get; }
@@ -21,21 +23,25 @@ namespace FinanceTracker.Domain.Accounts
 
         public bool IsClosed { get; private set; }
 
-        private Account(AccountId id, string name, AccountType type, string currency)
+        private Account(AccountId id, UserId ownerId, string name, AccountType type, string currency)
         {
             Id = id;
+            OwnerId = ownerId;
             Name = name;
             Type = type;
             Currency = currency;
             IsClosed = false;
         }
 
-        public static Account Create(string name, AccountType type, string currency)
+        public static Account Create(UserId ownerId, string name, AccountType type, string currency)
         {
+            if (ownerId == default)
+                throw new ArgumentException("An account must have an owner.", nameof(ownerId));
+
             ValidateName(name);
             CurrencyCodeValidator.EnsureValid(currency, nameof(currency));
 
-            return new Account(AccountId.New(), name.Trim(), type, currency);
+            return new Account(AccountId.New(), ownerId, name.Trim(), type, currency);
         }
 
         public void Rename(string name)

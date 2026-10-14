@@ -26,12 +26,12 @@ namespace FinanceTracker.Worker.IntegrationTests
         [Fact]
         public async Task AddedTransaction_IsCategorizedByTheWorker()
         {
-            var accountId = await SendAsync(new CreateAccountCommand("Checking", AccountType.Checking, "USD"));
+            var accountId = await SendAsync(new CreateAccountCommand(Owner, "Checking", AccountType.Checking, "USD"));
             await SendAsync(new CreateCategoryCommand("Groceries"));
             var transportId = await SendAsync(new CreateCategoryCommand("Transport"));
 
             var transactionId = await SendAsync(
-                new AddTransactionCommand(accountId, 18m, TransactionType.Expense, "UBER *TRIP", Today));
+                new AddTransactionCommand(Owner, accountId, 18m, TransactionType.Expense, "UBER *TRIP", Today));
 
             var categoryId = await WaitForCategoryAsync(transactionId);
 
@@ -42,7 +42,7 @@ namespace FinanceTracker.Worker.IntegrationTests
         [Fact]
         public async Task TransactionCategorizedByARule_KeepsItsCategory_AndTheAiIsNeverAsked()
         {
-            var accountId = await SendAsync(new CreateAccountCommand("Checking", AccountType.Checking, "USD"));
+            var accountId = await SendAsync(new CreateAccountCommand(Owner, "Checking", AccountType.Checking, "USD"));
             var groceriesId = await SendAsync(new CreateCategoryCommand("Groceries"));
             var transportId = await SendAsync(new CreateCategoryCommand("Transport"));
             await SendAsync(new CreateCategorizationRuleCommand("supermarket", groceriesId, Priority: 1));
@@ -50,7 +50,7 @@ namespace FinanceTracker.Worker.IntegrationTests
             // Imported through the real import pipeline, so the rule is
             // applied during processing, in the Worker.
             var importJobId = await SendAsync(new StartImportCommand(
-                accountId,
+                Owner, accountId,
                 new[] { new ImportJobRow(2, 54m, TransactionType.Expense, "CITY SUPERMARKET", Today) },
                 Array.Empty<ImportJobRowError>()));
             await WaitForProcessedImportJobAsync(importJobId);
@@ -62,7 +62,7 @@ namespace FinanceTracker.Worker.IntegrationTests
             // one consumer and prefetch 1 -- so once this one has been
             // categorized, the imported one's event has certainly been handled.
             var uncategorizedId = await SendAsync(
-                new AddTransactionCommand(accountId, 18m, TransactionType.Expense, "UBER *TRIP", Today));
+                new AddTransactionCommand(Owner, accountId, 18m, TransactionType.Expense, "UBER *TRIP", Today));
             (await WaitForCategoryAsync(uncategorizedId)).Should().Be(transportId);
 
             (await LoadCategoryAsync(ruleCategorized.Id)).Should().Be(groceriesId);

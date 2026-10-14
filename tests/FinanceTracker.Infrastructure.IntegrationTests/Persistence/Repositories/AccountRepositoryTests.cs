@@ -10,6 +10,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
 {
     public sealed class AccountRepositoryTests : IAsyncLifetime
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
         private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
             .Build();
 
@@ -38,13 +39,14 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         [Fact]
         public async Task AddAsync_ThenGetByIdAsync_RoundTripsAllFields()
         {
-            var account = Account.Create("Checking", AccountType.Checking, "USD");
+            var account = Account.Create(Owner, "Checking", AccountType.Checking, "USD");
 
             await _repository.AddAsync(account, CancellationToken.None);
-            var loaded = await _repository.GetByIdAsync(account.Id, CancellationToken.None);
+            var loaded = await _repository.GetByIdAsync(Owner, account.Id, CancellationToken.None);
 
             loaded.Should().NotBeNull();
             loaded!.Id.Should().Be(account.Id);
+            loaded.OwnerId.Should().Be(Owner);
             loaded.Name.Should().Be("Checking");
             loaded.Type.Should().Be(AccountType.Checking);
             loaded.Currency.Should().Be("USD");
@@ -59,10 +61,10 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         [InlineData(AccountType.Investment)]
         public async Task AddAsync_ThenGetByIdAsync_RoundTripsEveryAccountType(AccountType type)
         {
-            var account = Account.Create("Test", type, "USD");
+            var account = Account.Create(Owner, "Test", type, "USD");
 
             await _repository.AddAsync(account, CancellationToken.None);
-            var loaded = await _repository.GetByIdAsync(account.Id, CancellationToken.None);
+            var loaded = await _repository.GetByIdAsync(Owner, account.Id, CancellationToken.None);
 
             loaded!.Type.Should().Be(type);
         }
@@ -70,7 +72,18 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         [Fact]
         public async Task GetByIdAsync_WithUnknownId_ReturnsNull()
         {
-            var loaded = await _repository.GetByIdAsync(AccountId.New(), CancellationToken.None);
+            var loaded = await _repository.GetByIdAsync(Owner, AccountId.New(), CancellationToken.None);
+
+            loaded.Should().BeNull();
+        }
+
+        [Fact]
+        public async Task GetByIdAsync_ForAnotherOwner_ReturnsNull()
+        {
+            var account = Account.Create(Owner, "Checking", AccountType.Checking, "USD");
+            await _repository.AddAsync(account, CancellationToken.None);
+
+            var loaded = await _repository.GetByIdAsync(new UserId(Guid.NewGuid()), account.Id, CancellationToken.None);
 
             loaded.Should().BeNull();
         }

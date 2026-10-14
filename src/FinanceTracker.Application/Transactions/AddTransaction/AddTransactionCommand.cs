@@ -15,6 +15,7 @@ namespace FinanceTracker.Application.Transactions.AddTransaction
     /// with CategorizeTransaction.
     /// </summary>
     public sealed record AddTransactionCommand(
+        UserId OwnerId,
         AccountId AccountId,
         decimal Amount,
         TransactionType Type,

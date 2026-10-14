@@ -9,5 +9,5 @@ namespace FinanceTracker.Application.Accounts.GetAccountBalance
     /// itself stores no Balance, per
     /// docs/adr/0002-transaction-separate-aggregate-no-stored-balance.md.
     /// </summary>
-    public sealed record GetAccountBalanceQuery(AccountId AccountId) : IRequest<Result<Money>>;
+    public sealed record GetAccountBalanceQuery(UserId OwnerId, AccountId AccountId) : IRequest<Result<Money>>;
 }

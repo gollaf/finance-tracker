@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FinanceTracker.Domain.Accounts;
+using FinanceTracker.Domain.Common;
 using FinanceTracker.Infrastructure.Messaging;
 using FinanceTracker.Infrastructure.Outbox;
 using FinanceTracker.Infrastructure.Persistence;
@@ -17,6 +18,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Outbox
     /// </summary>
     public sealed class EfCoreOutboxTests : IAsyncLifetime
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
         private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
             .Build();
 
@@ -39,7 +41,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Outbox
         [Fact]
         public async Task Enqueue_ThenRepositorySave_PersistsTheEventAndTheChangeTogether()
         {
-            var account = Account.Create("Checking", AccountType.Checking, "USD");
+            var account = Account.Create(Owner, "Checking", AccountType.Checking, "USD");
             var integrationEvent = new TestIntegrationEvent(account.Id.Value, "account opened");
 
             await using (var context = new FinanceTrackerDbContext(_options))

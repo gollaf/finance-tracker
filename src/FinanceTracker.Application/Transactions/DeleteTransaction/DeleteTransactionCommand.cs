@@ -8,5 +8,5 @@ namespace FinanceTracker.Application.Transactions.DeleteTransaction
     /// Hard-deletes a Transaction. There's no soft-delete or undo — Transaction
     /// carries no "deleted" flag, so once this runs the row is gone.
     /// </summary>
-    public sealed record DeleteTransactionCommand(TransactionId TransactionId) : IRequest<Result>;
+    public sealed record DeleteTransactionCommand(UserId OwnerId, TransactionId TransactionId) : IRequest<Result>;
 }

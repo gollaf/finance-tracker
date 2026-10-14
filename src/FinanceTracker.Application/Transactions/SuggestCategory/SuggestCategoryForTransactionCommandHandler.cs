@@ -30,7 +30,8 @@ namespace FinanceTracker.Application.Transactions.SuggestCategory
         public async Task<Result<CategorySuggestionOutcome>> Handle(
             SuggestCategoryForTransactionCommand request, CancellationToken cancellationToken)
         {
-            var transaction = await _transactionRepository.GetByIdAsync(request.TransactionId, cancellationToken);
+            var transaction = await _transactionRepository.GetByIdAsync(
+                request.OwnerId, request.TransactionId, cancellationToken);
 
             if (transaction is null)
                 return Result.Success(CategorySuggestionOutcome.TransactionNotFound);
@@ -68,7 +69,7 @@ namespace FinanceTracker.Application.Transactions.SuggestCategory
             // may have categorized this Transaction by hand during the AI
             // call, and a plain update would overwrite that.
             var updated = await _transactionRepository.TrySetCategoryIfUncategorizedAsync(
-                transaction.Id, suggestedCategoryId, cancellationToken);
+                request.OwnerId, transaction.Id, suggestedCategoryId, cancellationToken);
 
             return Result.Success(updated
                 ? CategorySuggestionOutcome.Categorized

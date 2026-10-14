@@ -7,11 +7,12 @@ namespace FinanceTracker.Application.UnitTests.Transactions.AddTransaction
 {
     public class AddTransactionCommandValidatorTests
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
         private readonly AddTransactionCommandValidator _validator = new();
         private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         private static AddTransactionCommand ValidCommand() =>
-            new(AccountId.New(), 42.50m, TransactionType.Expense, "Groceries", Today);
+            new(Owner, AccountId.New(), 42.50m, TransactionType.Expense, "Groceries", Today);
 
         [Fact]
         public void Validate_WithValidCommand_IsValid()
@@ -78,6 +79,15 @@ namespace FinanceTracker.Application.UnitTests.Transactions.AddTransaction
 
             result.IsValid.Should().BeFalse();
             result.Errors.Should().Contain(e => e.PropertyName == nameof(AddTransactionCommand.OccurredOn));
+        }
+
+        [Fact]
+        public void Validate_WithDefaultOwnerId_IsInvalid()
+        {
+            var result = _validator.Validate(ValidCommand() with { OwnerId = default });
+
+            result.IsValid.Should().BeFalse();
+            result.Errors.Should().Contain(e => e.PropertyName == nameof(AddTransactionCommand.OwnerId));
         }
     }
 }

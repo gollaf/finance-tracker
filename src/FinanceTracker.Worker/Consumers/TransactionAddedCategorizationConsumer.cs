@@ -41,7 +41,8 @@ namespace FinanceTracker.Worker.Consumers
             var sender = services.GetRequiredService<ISender>();
 
             var result = await sender.Send(
-                new SuggestCategoryForTransactionCommand(new TransactionId(message.TransactionId)),
+                new SuggestCategoryForTransactionCommand(
+                    new UserId(message.OwnerId), new TransactionId(message.TransactionId)),
                 cancellationToken);
 
             // Expected situations, including the AI being unavailable, are

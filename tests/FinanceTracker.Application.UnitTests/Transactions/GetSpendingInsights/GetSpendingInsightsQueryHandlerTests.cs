@@ -14,7 +14,8 @@ namespace FinanceTracker.Application.UnitTests.Transactions.GetSpendingInsights
 {
     public class GetSpendingInsightsQueryHandlerTests
     {
-        private static Account NewAccount() => Account.Create("Checking", AccountType.Checking, "USD");
+        private static readonly UserId Owner = new(Guid.NewGuid());
+        private static Account NewAccount() => Account.Create(Owner, "Checking", AccountType.Checking, "USD");
 
         private static GetSpendingInsightsQueryHandler NewHandler(
             IAccountRepository accountRepository,
@@ -26,7 +27,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.GetSpendingInsights
         private static IAccountRepository AccountRepositoryReturning(Account account)
         {
             var repository = Substitute.For<IAccountRepository>();
-            repository.GetByIdAsync(account.Id, Arg.Any<CancellationToken>()).Returns(account);
+            repository.GetByIdAsync(Owner, account.Id, Arg.Any<CancellationToken>()).Returns(account);
             return repository;
         }
 
@@ -34,7 +35,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.GetSpendingInsights
             Account account, params Transaction[] transactions)
         {
             var repository = Substitute.For<ITransactionRepository>();
-            repository.GetByAccountIdAsync(account.Id, Arg.Any<CancellationToken>()).Returns(transactions);
+            repository.GetByAccountIdAsync(Owner, account.Id, Arg.Any<CancellationToken>()).Returns(transactions);
             return repository;
         }
 
@@ -62,12 +63,12 @@ namespace FinanceTracker.Application.UnitTests.Transactions.GetSpendingInsights
             // rounded to 1 decimal place is 66.7.
             var transactions = new[]
             {
-                Transaction.Create(account.Id, Money.Create(30m, "USD"), TransactionType.Expense, "Store", new DateOnly(2026, 6, 5), groceries),
-                Transaction.Create(account.Id, Money.Create(20m, "USD"), TransactionType.Expense, "Market", new DateOnly(2026, 6, 10), groceries),
-                Transaction.Create(account.Id, Money.Create(30m, "USD"), TransactionType.Expense, "Store", new DateOnly(2026, 3, 15), groceries),
-                Transaction.Create(account.Id, Money.Create(30m, "USD"), TransactionType.Expense, "Store", new DateOnly(2026, 4, 15), groceries),
-                Transaction.Create(account.Id, Money.Create(30m, "USD"), TransactionType.Expense, "Store", new DateOnly(2026, 5, 15), groceries),
-                Transaction.Create(account.Id, Money.Create(500m, "USD"), TransactionType.Income, "Salary", new DateOnly(2026, 6, 1)),
+                Transaction.Create(Owner, account.Id, Money.Create(30m, "USD"), TransactionType.Expense, "Store", new DateOnly(2026, 6, 5), groceries),
+                Transaction.Create(Owner, account.Id, Money.Create(20m, "USD"), TransactionType.Expense, "Market", new DateOnly(2026, 6, 10), groceries),
+                Transaction.Create(Owner, account.Id, Money.Create(30m, "USD"), TransactionType.Expense, "Store", new DateOnly(2026, 3, 15), groceries),
+                Transaction.Create(Owner, account.Id, Money.Create(30m, "USD"), TransactionType.Expense, "Store", new DateOnly(2026, 4, 15), groceries),
+                Transaction.Create(Owner, account.Id, Money.Create(30m, "USD"), TransactionType.Expense, "Store", new DateOnly(2026, 5, 15), groceries),
+                Transaction.Create(Owner, account.Id, Money.Create(500m, "USD"), TransactionType.Income, "Salary", new DateOnly(2026, 6, 1)),
             };
 
             var accountRepository = AccountRepositoryReturning(account);
@@ -80,7 +81,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.GetSpendingInsights
                 .Returns(Result.Success("You spent more on groceries than usual this month."));
 
             var handler = NewHandler(accountRepository, transactionRepository, categoryRepository, insightsGenerator);
-            var query = new GetSpendingInsightsQuery(account.Id, 2026, 6);
+            var query = new GetSpendingInsightsQuery(Owner, account.Id, 2026, 6);
 
             var result = await handler.Handle(query, CancellationToken.None);
 
@@ -105,7 +106,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.GetSpendingInsights
 
             var transactions = new[]
             {
-                Transaction.Create(account.Id, Money.Create(50m, "USD"), TransactionType.Expense, "Store", new DateOnly(2026, 6, 5), groceries),
+                Transaction.Create(Owner, account.Id, Money.Create(50m, "USD"), TransactionType.Expense, "Store", new DateOnly(2026, 6, 5), groceries),
             };
 
             var accountRepository = AccountRepositoryReturning(account);
@@ -118,7 +119,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.GetSpendingInsights
                 .Returns(Result.Failure<string>(Error.Failure("Groq.Timeout", "The request timed out.")));
 
             var handler = NewHandler(accountRepository, transactionRepository, categoryRepository, insightsGenerator);
-            var query = new GetSpendingInsightsQuery(account.Id, 2026, 6);
+            var query = new GetSpendingInsightsQuery(Owner, account.Id, 2026, 6);
 
             var result = await handler.Handle(query, CancellationToken.None);
 
@@ -135,7 +136,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.GetSpendingInsights
             var account = NewAccount();
             var transactions = new[]
             {
-                Transaction.Create(account.Id, Money.Create(500m, "USD"), TransactionType.Income, "Salary", new DateOnly(2026, 6, 1)),
+                Transaction.Create(Owner, account.Id, Money.Create(500m, "USD"), TransactionType.Income, "Salary", new DateOnly(2026, 6, 1)),
             };
 
             var accountRepository = AccountRepositoryReturning(account);
@@ -144,7 +145,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.GetSpendingInsights
             var insightsGenerator = Substitute.For<IInsightsGenerator>();
 
             var handler = NewHandler(accountRepository, transactionRepository, categoryRepository, insightsGenerator);
-            var query = new GetSpendingInsightsQuery(account.Id, 2026, 6);
+            var query = new GetSpendingInsightsQuery(Owner, account.Id, 2026, 6);
 
             var result = await handler.Handle(query, CancellationToken.None);
 
@@ -166,7 +167,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.GetSpendingInsights
 
             var transactions = new[]
             {
-                Transaction.Create(account.Id, Money.Create(15m, "USD"), TransactionType.Expense, "Cafe", new DateOnly(2026, 6, 12), dining),
+                Transaction.Create(Owner, account.Id, Money.Create(15m, "USD"), TransactionType.Expense, "Cafe", new DateOnly(2026, 6, 12), dining),
             };
 
             var accountRepository = AccountRepositoryReturning(account);
@@ -179,7 +180,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.GetSpendingInsights
                 .Returns(Result.Success("New spending in Dining Out this month."));
 
             var handler = NewHandler(accountRepository, transactionRepository, categoryRepository, insightsGenerator);
-            var query = new GetSpendingInsightsQuery(account.Id, 2026, 6);
+            var query = new GetSpendingInsightsQuery(Owner, account.Id, 2026, 6);
 
             var result = await handler.Handle(query, CancellationToken.None);
 
@@ -194,7 +195,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.GetSpendingInsights
             var account = NewAccount();
             var transactions = new[]
             {
-                Transaction.Create(account.Id, Money.Create(10m, "USD"), TransactionType.Expense, "Misc", new DateOnly(2026, 6, 1)),
+                Transaction.Create(Owner, account.Id, Money.Create(10m, "USD"), TransactionType.Expense, "Misc", new DateOnly(2026, 6, 1)),
             };
 
             var accountRepository = AccountRepositoryReturning(account);
@@ -207,7 +208,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.GetSpendingInsights
                 .Returns(Result.Success("Some uncategorized spending this month."));
 
             var handler = NewHandler(accountRepository, transactionRepository, categoryRepository, insightsGenerator);
-            var query = new GetSpendingInsightsQuery(account.Id, 2026, 6);
+            var query = new GetSpendingInsightsQuery(Owner, account.Id, 2026, 6);
 
             var result = await handler.Handle(query, CancellationToken.None);
 
@@ -225,7 +226,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.GetSpendingInsights
         {
             var accountRepository = Substitute.For<IAccountRepository>();
             accountRepository
-                .GetByIdAsync(Arg.Any<AccountId>(), Arg.Any<CancellationToken>())
+                .GetByIdAsync(Owner, Arg.Any<AccountId>(), Arg.Any<CancellationToken>())
                 .Returns((Account?)null);
 
             var transactionRepository = Substitute.For<ITransactionRepository>();
@@ -233,7 +234,7 @@ namespace FinanceTracker.Application.UnitTests.Transactions.GetSpendingInsights
             var insightsGenerator = Substitute.For<IInsightsGenerator>();
 
             var handler = NewHandler(accountRepository, transactionRepository, categoryRepository, insightsGenerator);
-            var query = new GetSpendingInsightsQuery(AccountId.New(), 2026, 6);
+            var query = new GetSpendingInsightsQuery(Owner, AccountId.New(), 2026, 6);
 
             var result = await handler.Handle(query, CancellationToken.None);
 

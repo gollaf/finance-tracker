@@ -10,19 +10,20 @@ namespace FinanceTracker.Application.UnitTests.Transactions.DeleteTransaction
 {
     public class DeleteTransactionCommandHandlerTests
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
         private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         [Fact]
         public async Task Handle_WithExistingTransaction_DeletesItAndSucceeds()
         {
             var transaction = Transaction.Create(
-                AccountId.New(), Money.Create(20m, "USD"), TransactionType.Expense, "Coffee", Today);
+                Owner, AccountId.New(), Money.Create(20m, "USD"), TransactionType.Expense, "Coffee", Today);
 
             var repository = Substitute.For<ITransactionRepository>();
-            repository.GetByIdAsync(transaction.Id, Arg.Any<CancellationToken>()).Returns(transaction);
+            repository.GetByIdAsync(Owner, transaction.Id, Arg.Any<CancellationToken>()).Returns(transaction);
 
             var handler = new DeleteTransactionCommandHandler(repository);
-            var command = new DeleteTransactionCommand(transaction.Id);
+            var command = new DeleteTransactionCommand(Owner, transaction.Id);
 
             var result = await handler.Handle(command, CancellationToken.None);
 
@@ -35,11 +36,11 @@ namespace FinanceTracker.Application.UnitTests.Transactions.DeleteTransaction
         {
             var repository = Substitute.For<ITransactionRepository>();
             repository
-                .GetByIdAsync(Arg.Any<TransactionId>(), Arg.Any<CancellationToken>())
+                .GetByIdAsync(Owner, Arg.Any<TransactionId>(), Arg.Any<CancellationToken>())
                 .Returns((Transaction?)null);
 
             var handler = new DeleteTransactionCommandHandler(repository);
-            var command = new DeleteTransactionCommand(TransactionId.New());
+            var command = new DeleteTransactionCommand(Owner, TransactionId.New());
 
             var result = await handler.Handle(command, CancellationToken.None);
 

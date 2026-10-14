@@ -10,23 +10,24 @@ namespace FinanceTracker.Application.UnitTests.Transactions.UpdateTransaction
 {
     public class UpdateTransactionCommandHandlerTests
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
         private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         [Fact]
         public async Task Handle_WithValidCommand_UpdatesTransactionFieldsAndSaves()
         {
             var transaction = Transaction.Create(
-                AccountId.New(),
+                Owner, AccountId.New(),
                 Money.Create(20m, "USD"),
                 TransactionType.Expense,
                 "Old description",
                 Today.AddDays(-1));
 
             var repository = Substitute.For<ITransactionRepository>();
-            repository.GetByIdAsync(transaction.Id, Arg.Any<CancellationToken>()).Returns(transaction);
+            repository.GetByIdAsync(Owner, transaction.Id, Arg.Any<CancellationToken>()).Returns(transaction);
 
             var handler = new UpdateTransactionCommandHandler(repository);
-            var command = new UpdateTransactionCommand(transaction.Id, 35m, "New description", Today);
+            var command = new UpdateTransactionCommand(Owner, transaction.Id, 35m, "New description", Today);
 
             var result = await handler.Handle(command, CancellationToken.None);
 
@@ -42,11 +43,11 @@ namespace FinanceTracker.Application.UnitTests.Transactions.UpdateTransaction
         {
             var repository = Substitute.For<ITransactionRepository>();
             repository
-                .GetByIdAsync(Arg.Any<TransactionId>(), Arg.Any<CancellationToken>())
+                .GetByIdAsync(Owner, Arg.Any<TransactionId>(), Arg.Any<CancellationToken>())
                 .Returns((Transaction?)null);
 
             var handler = new UpdateTransactionCommandHandler(repository);
-            var command = new UpdateTransactionCommand(TransactionId.New(), 35m, "New description", Today);
+            var command = new UpdateTransactionCommand(Owner, TransactionId.New(), 35m, "New description", Today);
 
             var result = await handler.Handle(command, CancellationToken.None);
 

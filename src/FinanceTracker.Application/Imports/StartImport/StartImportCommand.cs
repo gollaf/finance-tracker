@@ -13,6 +13,7 @@ namespace FinanceTracker.Application.Imports.StartImport
     /// </summary>
     /// <param name="ParseErrors">Rows the file parser rejected, recorded on the job as-is.</param>
     public sealed record StartImportCommand(
+        UserId OwnerId,
         AccountId AccountId,
         IReadOnlyList<ImportJobRow> Rows,
         IReadOnlyList<ImportJobRowError> ParseErrors) : IRequest<Result<ImportJobId>>;

@@ -24,7 +24,7 @@ namespace FinanceTracker.Application.Accounts.GetAccountBalance
 
         public async Task<Result<Money>> Handle(GetAccountBalanceQuery request, CancellationToken cancellationToken)
         {
-            var account = await _accountRepository.GetByIdAsync(request.AccountId, cancellationToken);
+            var account = await _accountRepository.GetByIdAsync(request.OwnerId, request.AccountId, cancellationToken);
 
             if (account is null)
             {
@@ -32,7 +32,8 @@ namespace FinanceTracker.Application.Accounts.GetAccountBalance
                     "Account.NotFound", $"No account found with id '{request.AccountId}'."));
             }
 
-            var transactions = await _transactionRepository.GetByAccountIdAsync(request.AccountId, cancellationToken);
+            var transactions = await _transactionRepository.GetByAccountIdAsync(
+                request.OwnerId, request.AccountId, cancellationToken);
 
             var balance = transactions.Aggregate(
                 Money.Zero(account.Currency), (total, transaction) => total + transaction.SignedAmount);

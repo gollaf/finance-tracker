@@ -22,12 +22,12 @@ namespace FinanceTracker.Worker.IntegrationTests
         [Fact]
         public async Task StartedImport_IsProcessedByTheWorker_AndTheJobReportsTheOutcome()
         {
-            var accountId = await SendAsync(new CreateAccountCommand("Checking", AccountType.Checking, "USD"));
+            var accountId = await SendAsync(new CreateAccountCommand(Owner, "Checking", AccountType.Checking, "USD"));
             await SendAsync(new CreateCategoryCommand("Groceries"));
             var transportId = await SendAsync(new CreateCategoryCommand("Transport"));
 
             var importJobId = await SendAsync(new StartImportCommand(
-                accountId,
+                Owner, accountId,
                 new[]
                 {
                     new ImportJobRow(2, 18m, TransactionType.Expense, "UBER *TRIP", Today),

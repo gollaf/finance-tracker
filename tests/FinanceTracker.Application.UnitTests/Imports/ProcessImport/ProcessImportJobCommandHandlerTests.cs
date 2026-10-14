@@ -18,6 +18,7 @@ namespace FinanceTracker.Application.UnitTests.Imports.ProcessImport
 {
     public class ProcessImportJobCommandHandlerTests
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
         private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         private readonly InlineUnitOfWork _unitOfWork = new();
@@ -27,11 +28,11 @@ namespace FinanceTracker.Application.UnitTests.Imports.ProcessImport
         private readonly ICategorizationRuleRepository _ruleRepository = Substitute.For<ICategorizationRuleRepository>();
         private readonly IOutbox _outbox = Substitute.For<IOutbox>();
 
-        private readonly Account _account = Account.Create("Checking", AccountType.Checking, "USD");
+        private readonly Account _account = Account.Create(Owner, "Checking", AccountType.Checking, "USD");
 
         public ProcessImportJobCommandHandlerTests()
         {
-            _accountRepository.GetByIdAsync(_account.Id, Arg.Any<CancellationToken>()).Returns(_account);
+            _accountRepository.GetByIdAsync(Owner, _account.Id, Arg.Any<CancellationToken>()).Returns(_account);
             _ruleRepository.GetAllAsync(Arg.Any<CancellationToken>()).Returns(Array.Empty<CategorizationRule>());
         }
 
@@ -43,14 +44,14 @@ namespace FinanceTracker.Application.UnitTests.Imports.ProcessImport
 
         private ImportJob GivenJob(ImportJobRow[] rows, params ImportJobRowError[] parseErrors)
         {
-            var job = ImportJob.Create(_account.Id, rows, parseErrors);
-            _importJobRepository.GetByIdAsync(job.Id, Arg.Any<CancellationToken>()).Returns(job);
+            var job = ImportJob.Create(Owner, _account.Id, rows, parseErrors);
+            _importJobRepository.GetByIdAsync(Owner, job.Id, Arg.Any<CancellationToken>()).Returns(job);
             return job;
         }
 
         private async Task<ProcessImportJobOutcome> HandleAsync(ImportJobId importJobId)
         {
-            var result = await NewHandler().Handle(new ProcessImportJobCommand(importJobId), CancellationToken.None);
+            var result = await NewHandler().Handle(new ProcessImportJobCommand(Owner, importJobId), CancellationToken.None);
 
             result.IsSuccess.Should().BeTrue();
             return result.Value;
@@ -72,8 +73,10 @@ namespace FinanceTracker.Application.UnitTests.Imports.ProcessImport
             // parsing at upload. Both end up in one list, in line order.
             job.Errors.Select(e => e.RowNumber).Should().Equal(3, 5);
 
-            await _transactionRepository.Received(2).AddAsync(Arg.Any<Transaction>(), Arg.Any<CancellationToken>());
-            _outbox.Received(2).Enqueue(Arg.Any<TransactionAdded>());
+            // Imported transactions, and their events, belong to the job's owner.
+            await _transactionRepository.Received(2).AddAsync(
+                Arg.Is<Transaction>(t => t.OwnerId == Owner), Arg.Any<CancellationToken>());
+            _outbox.Received(2).Enqueue(Arg.Is<TransactionAdded>(e => e.OwnerId == Owner.Value));
             await _importJobRepository.Received(1).UpdateAsync(job, Arg.Any<CancellationToken>());
         }
 
@@ -137,7 +140,7 @@ namespace FinanceTracker.Application.UnitTests.Imports.ProcessImport
         [Fact]
         public async Task Handle_WhenJobDoesNotExist_ReportsJobNotFound()
         {
-            _importJobRepository.GetByIdAsync(Arg.Any<ImportJobId>(), Arg.Any<CancellationToken>()).Returns((ImportJob?)null);
+            _importJobRepository.GetByIdAsync(Owner, Arg.Any<ImportJobId>(), Arg.Any<CancellationToken>()).Returns((ImportJob?)null);
 
             var outcome = await HandleAsync(ImportJobId.New());
 
@@ -163,7 +166,7 @@ namespace FinanceTracker.Application.UnitTests.Imports.ProcessImport
         public async Task Handle_WhenAccountNoLongerExists_FailsTheJob()
         {
             var job = GivenJob(new[] { Row(2, "Coffee") });
-            _accountRepository.GetByIdAsync(_account.Id, Arg.Any<CancellationToken>()).Returns((Account?)null);
+            _accountRepository.GetByIdAsync(Owner, _account.Id, Arg.Any<CancellationToken>()).Returns((Account?)null);
 
             var outcome = await HandleAsync(job.Id);
 
@@ -179,13 +182,26 @@ namespace FinanceTracker.Application.UnitTests.Imports.ProcessImport
                 .AddAsync(Arg.Any<Transaction>(), Arg.Any<CancellationToken>())
                 .Returns(Task.FromException(new InvalidOperationException("Database went away.")));
 
-            var act = () => NewHandler().Handle(new ProcessImportJobCommand(job.Id), CancellationToken.None);
+            var act = () => NewHandler().Handle(new ProcessImportJobCommand(Owner, job.Id), CancellationToken.None);
 
             // Not caught as a row error: only ArgumentException is. Escaping
             // is what makes the real unit of work roll back, and the message
             // be retried from a clean state.
             await act.Should().ThrowAsync<InvalidOperationException>();
             await _importJobRepository.DidNotReceive().UpdateAsync(Arg.Any<ImportJob>(), Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
+        public async Task Handle_JobOfAnotherOwner_IsNotFound()
+        {
+            var job = GivenJob(new[] { Row(2, "Coffee") });
+            var someoneElse = new UserId(Guid.NewGuid());
+
+            var result = await NewHandler().Handle(new ProcessImportJobCommand(someoneElse, job.Id), CancellationToken.None);
+
+            result.Value.Should().Be(ProcessImportJobOutcome.JobNotFound);
+            job.IsPending.Should().BeTrue();
+            await _transactionRepository.DidNotReceive().AddAsync(Arg.Any<Transaction>(), Arg.Any<CancellationToken>());
         }
     }
 }

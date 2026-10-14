@@ -14,7 +14,7 @@ namespace FinanceTracker.Application.Imports.GetImportJob
 
         public async Task<Result<ImportJobDto>> Handle(GetImportJobQuery request, CancellationToken cancellationToken)
         {
-            var importJob = await _importJobRepository.GetByIdAsync(request.ImportJobId, cancellationToken);
+            var importJob = await _importJobRepository.GetByIdAsync(request.OwnerId, request.ImportJobId, cancellationToken);
 
             if (importJob is null)
             {

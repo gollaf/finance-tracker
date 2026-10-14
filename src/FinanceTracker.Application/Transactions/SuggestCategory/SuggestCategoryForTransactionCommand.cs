@@ -17,6 +17,6 @@ namespace FinanceTracker.Application.Transactions.SuggestCategory
     /// fix. Only an unexpected exception (the database being unreachable,
     /// say) escapes, and that is what makes the message consumer retry.
     /// </remarks>
-    public sealed record SuggestCategoryForTransactionCommand(TransactionId TransactionId)
+    public sealed record SuggestCategoryForTransactionCommand(UserId OwnerId, TransactionId TransactionId)
         : IRequest<Result<CategorySuggestionOutcome>>;
 }

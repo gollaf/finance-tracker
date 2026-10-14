@@ -25,6 +25,13 @@ namespace FinanceTracker.Infrastructure.Persistence.Configurations
                 .HasConversion(new StronglyTypedIdValueConverter<ImportJobId>(id => id.Value, value => new ImportJobId(value)))
                 .ValueGeneratedNever();
 
+            builder.Property(j => j.OwnerId)
+                .HasConversion(new StronglyTypedIdValueConverter<UserId>(id => id.Value, value => new UserId(value)))
+                .IsRequired();
+
+            // Every lookup filters on the owner.
+            builder.HasIndex(j => j.OwnerId);
+
             builder.Property(j => j.AccountId)
                 .HasConversion(new StronglyTypedIdValueConverter<AccountId>(id => id.Value, value => new AccountId(value)))
                 .IsRequired();

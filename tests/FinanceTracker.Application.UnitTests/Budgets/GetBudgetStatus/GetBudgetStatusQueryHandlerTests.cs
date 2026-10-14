@@ -12,6 +12,8 @@ namespace FinanceTracker.Application.UnitTests.Budgets.GetBudgetStatus
 {
     public class GetBudgetStatusQueryHandlerTests
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
+
         [Fact]
         public async Task Handle_WithSpendingUnderLimit_ReturnsPositiveRemainingAndNotOverBudget()
         {
@@ -22,16 +24,16 @@ namespace FinanceTracker.Application.UnitTests.Budgets.GetBudgetStatus
             var transactions = new[]
             {
                 Transaction.Create(
-                    AccountId.New(), Money.Create(50m, "USD"), TransactionType.Expense, "Store",
+                    Owner, AccountId.New(), Money.Create(50m, "USD"), TransactionType.Expense, "Store",
                     new DateOnly(2026, 6, 5), categoryId),
                 Transaction.Create(
-                    AccountId.New(), Money.Create(30m, "USD"), TransactionType.Expense, "Market",
+                    Owner, AccountId.New(), Money.Create(30m, "USD"), TransactionType.Expense, "Market",
                     new DateOnly(2026, 6, 10), categoryId),
                 Transaction.Create(
-                    AccountId.New(), Money.Create(500m, "USD"), TransactionType.Income, "Refund",
+                    Owner, AccountId.New(), Money.Create(500m, "USD"), TransactionType.Income, "Refund",
                     new DateOnly(2026, 6, 1), categoryId),
                 Transaction.Create(
-                    AccountId.New(), Money.Create(999m, "USD"), TransactionType.Expense, "Outside period",
+                    Owner, AccountId.New(), Money.Create(999m, "USD"), TransactionType.Expense, "Outside period",
                     new DateOnly(2026, 5, 1), categoryId),
             };
 
@@ -64,7 +66,7 @@ namespace FinanceTracker.Application.UnitTests.Budgets.GetBudgetStatus
             var transactions = new[]
             {
                 Transaction.Create(
-                    AccountId.New(), Money.Create(150m, "USD"), TransactionType.Expense, "Store",
+                    Owner, AccountId.New(), Money.Create(150m, "USD"), TransactionType.Expense, "Store",
                     new DateOnly(2026, 6, 5), categoryId),
             };
 

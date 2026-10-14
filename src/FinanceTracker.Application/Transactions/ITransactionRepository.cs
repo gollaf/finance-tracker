@@ -3,14 +3,18 @@ using FinanceTracker.Domain.Transactions;
 
 namespace FinanceTracker.Application.Transactions
 {
-    /// <summary>Persistence contract for Transaction, implemented by Infrastructure.</summary>
+    /// <summary>
+    /// Persistence contract for Transaction, implemented by Infrastructure.
+    /// Reads and conditional writes are scoped to one owner: another user's
+    /// Transaction is simply not found.
+    /// </summary>
     public interface ITransactionRepository
     {
-        Task<Transaction?> GetByIdAsync(TransactionId id, CancellationToken cancellationToken = default);
+        Task<Transaction?> GetByIdAsync(UserId ownerId, TransactionId id, CancellationToken cancellationToken = default);
 
         /// <summary>Feeds GetAccountBalance and GetSpendingSummary, which compute rather than store a total.</summary>
         Task<IReadOnlyList<Transaction>> GetByAccountIdAsync(
-            AccountId accountId, CancellationToken cancellationToken = default);
+            UserId ownerId, AccountId accountId, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Feeds GetBudgetStatus. Unfiltered by Account on purpose — a Budget
@@ -32,7 +36,7 @@ namespace FinanceTracker.Application.Transactions
         /// never be overwritten.
         /// </summary>
         Task<bool> TrySetCategoryIfUncategorizedAsync(
-            TransactionId transactionId, CategoryId categoryId, CancellationToken cancellationToken = default);
+            UserId ownerId, TransactionId transactionId, CategoryId categoryId, CancellationToken cancellationToken = default);
 
         Task DeleteAsync(Transaction transaction, CancellationToken cancellationToken = default);
     }

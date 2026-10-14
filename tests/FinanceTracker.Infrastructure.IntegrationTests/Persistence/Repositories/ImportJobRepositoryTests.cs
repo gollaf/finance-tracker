@@ -12,6 +12,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
 {
     public sealed class ImportJobRepositoryTests : IAsyncLifetime
     {
+        private static readonly UserId Owner = new(Guid.NewGuid());
         private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
             .Build();
 
@@ -34,14 +35,14 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         private async Task<AccountId> CreatePersistedAccountAsync()
         {
             await using var context = new FinanceTrackerDbContext(_options);
-            var account = Account.Create("Checking", AccountType.Checking, "USD");
+            var account = Account.Create(Owner, "Checking", AccountType.Checking, "USD");
             await new AccountRepository(context).AddAsync(account, CancellationToken.None);
             return account.Id;
         }
 
         private static ImportJob NewJob(AccountId accountId) =>
             ImportJob.Create(
-                accountId,
+                Owner, accountId,
                 new[]
                 {
                     new ImportJobRow(2, 4.5m, TransactionType.Expense, "Coffee", new DateOnly(2026, 9, 1)),
@@ -62,7 +63,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
             // A fresh DbContext, so this really reads the database rather
             // than returning the instance the first context still tracks.
             await using var verify = new FinanceTrackerDbContext(_options);
-            var loaded = await new ImportJobRepository(verify).GetByIdAsync(job.Id, CancellationToken.None);
+            var loaded = await new ImportJobRepository(verify).GetByIdAsync(Owner, job.Id, CancellationToken.None);
 
             loaded.Should().NotBeNull();
             loaded!.AccountId.Should().Be(job.AccountId);
@@ -87,7 +88,7 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
             }
 
             await using var verify = new FinanceTrackerDbContext(_options);
-            var loaded = await new ImportJobRepository(verify).GetByIdAsync(job.Id, CancellationToken.None);
+            var loaded = await new ImportJobRepository(verify).GetByIdAsync(Owner, job.Id, CancellationToken.None);
 
             loaded!.Status.Should().Be(ImportJobStatus.Completed);
             loaded.ImportedCount.Should().Be(1);
@@ -100,7 +101,24 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Persistence.Repositorie
         {
             await using var context = new FinanceTrackerDbContext(_options);
 
-            var loaded = await new ImportJobRepository(context).GetByIdAsync(ImportJobId.New(), CancellationToken.None);
+            var loaded = await new ImportJobRepository(context).GetByIdAsync(Owner, ImportJobId.New(), CancellationToken.None);
+
+            loaded.Should().BeNull();
+        }
+
+        [Fact]
+        public async Task GetByIdAsync_ForAnotherOwner_ReturnsNull()
+        {
+            var job = NewJob(await CreatePersistedAccountAsync());
+
+            await using (var context = new FinanceTrackerDbContext(_options))
+            {
+                await new ImportJobRepository(context).AddAsync(job, CancellationToken.None);
+            }
+
+            await using var verify = new FinanceTrackerDbContext(_options);
+            var loaded = await new ImportJobRepository(verify).GetByIdAsync(
+                new UserId(Guid.NewGuid()), job.Id, CancellationToken.None);
 
             loaded.Should().BeNull();
         }
