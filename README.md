@@ -164,6 +164,9 @@ Integration tests start real PostgreSQL and RabbitMQ containers through
 Testcontainers, so Docker must be running. Only the AI is replaced by a stub;
 the tests that call the real Groq API run only when `GROQ_API_KEY` is set.
 
+The tests in `tests/FinanceTracker.Aws.Tests` synthesize the AWS stacks.
+The AWS CDK runs on Node.js, so they need Node.js 20 or newer installed.
+
 ## Continuous Integration and Delivery
 
 Every pull request and every push to `master` runs
@@ -330,6 +333,25 @@ copy it into `backups/` with `scp`, start only the database
 (`docker compose up -d postgres`), and run the same `dropdb` and `restore.sh`
 before `docker compose up -d`.
 
+## Running on AWS
+
+A timeboxed copy of the system on AWS, defined in C# with the AWS CDK in
+[`deploy/aws`](./deploy/aws)
+([ADR 0032](./docs/adr/0032-aws-deployment-with-cdk-fargate-and-rds.md)).
+The `FinanceTracker-Data` stack holds the network -- public subnets and
+isolated ones, no NAT gateway -- and PostgreSQL on RDS.
+
+Requires .NET 10, Node.js 20 or newer and the AWS CLI, signed in with
+`aws login`. From `deploy/aws`:
+
+```bash
+npm ci                                # installs the pinned CDK CLI
+npx cdk bootstrap                     # once per account and region
+npx cdk diff FinanceTracker-Data      # shows what a deploy would change
+npx cdk deploy FinanceTracker-Data
+npx cdk destroy FinanceTracker-Data   # deletes the database and its data
+```
+
 ## Roadmap
 
 Done: domain and use cases, persistence and API, Docker, AI insights,
@@ -393,6 +415,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0029 — HTTPS with Caddy on a DuckDNS name](./docs/adr/0029-https-with-caddy-on-a-duckdns-name.md)
 - [0030 — Database backups to Object Storage](./docs/adr/0030-database-backups-to-object-storage.md)
 - [0031 — Deploying from GitHub Actions over SSH](./docs/adr/0031-deploying-from-github-actions-over-ssh.md)
+- [0032 — AWS deployment with the CDK, Fargate and RDS](./docs/adr/0032-aws-deployment-with-cdk-fargate-and-rds.md)
 
 ## License
 
