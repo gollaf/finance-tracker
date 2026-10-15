@@ -338,19 +338,31 @@ before `docker compose up -d`.
 A timeboxed copy of the system on AWS, defined in C# with the AWS CDK in
 [`deploy/aws`](./deploy/aws)
 ([ADR 0032](./docs/adr/0032-aws-deployment-with-cdk-fargate-and-rds.md)).
-The `FinanceTracker-Data` stack holds the network -- public subnets and
-isolated ones, no NAT gateway -- and PostgreSQL on RDS.
+Two stacks:
+
+- `FinanceTracker-Data` -- the network (public subnets and isolated ones,
+  no NAT gateway) and PostgreSQL on RDS.
+- `FinanceTracker-App` -- an ECS cluster on Fargate running RabbitMQ and
+  the Worker, which migrates the database before it starts
+  ([ADR 0033](./docs/adr/0033-services-on-ecs-discovery-migrations-and-secrets.md)).
+  It holds no data, so it can be destroyed whenever it isn't needed.
 
 Requires .NET 10, Node.js 20 or newer and the AWS CLI, signed in with
-`aws login`. From `deploy/aws`:
+`aws login`. The application stack runs one build CI published, chosen
+with `-c imageTag=sha-<7 characters>`; without it, only the data stack is
+part of the app. From `deploy/aws`:
 
 ```bash
-npm ci                                # installs the pinned CDK CLI
-npx cdk bootstrap                     # once per account and region
-npx cdk diff FinanceTracker-Data      # shows what a deploy would change
-npx cdk deploy FinanceTracker-Data
-npx cdk destroy FinanceTracker-Data   # deletes the database and its data
+npm ci                                                # installs the pinned CDK CLI
+npx cdk bootstrap                                     # once per account and region
+npx cdk diff --all -c imageTag=sha-1234567            # shows what a deploy would change
+npx cdk deploy --all -c imageTag=sha-1234567
+npx cdk destroy FinanceTracker-App -c imageTag=sha-1234567
+npx cdk destroy FinanceTracker-Data                   # deletes the database and its data
 ```
+
+The services' output is in CloudWatch:
+`aws logs tail /finance-tracker/worker --follow`.
 
 ## Roadmap
 
@@ -416,6 +428,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0030 — Database backups to Object Storage](./docs/adr/0030-database-backups-to-object-storage.md)
 - [0031 — Deploying from GitHub Actions over SSH](./docs/adr/0031-deploying-from-github-actions-over-ssh.md)
 - [0032 — AWS deployment with the CDK, Fargate and RDS](./docs/adr/0032-aws-deployment-with-cdk-fargate-and-rds.md)
+- [0033 — Services on ECS: discovery, migrations and secrets](./docs/adr/0033-services-on-ecs-discovery-migrations-and-secrets.md)
 
 ## License
 
