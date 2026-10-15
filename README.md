@@ -176,6 +176,9 @@ pull request / push to master
   │     └─ docker-image (api), docker-image (worker)
   │            build both images for amd64 and arm64; on master also push them to ghcr.io
   └─ k8s-manifests ── kustomize build deploy/k8s, validated by kubeconform
+
+master CI passed ── Deploy (.github/workflows/deploy.yml)
+  waits for approval, then runs deploy.sh on the server over SSH
 ```
 
 All four checks must pass before a pull request can be merged. Images
@@ -277,6 +280,20 @@ certificate it obtains and renews by itself, and forwards to the Api
 ([ADR 0029](./docs/adr/0029-https-with-caddy-on-a-duckdns-name.md)). The
 RabbitMQ management UI is reachable only through an SSH tunnel.
 
+### Deploys
+
+When CI passes on `master`, the
+[`Deploy`](./.github/workflows/deploy.yml) workflow waits for approval on
+the `production` environment and then runs
+[`deploy.sh`](./deploy/server/deploy.sh) on the server over SSH
+([ADR 0031](./docs/adr/0031-deploying-from-github-actions-over-ssh.md)):
+backup, pull, switch `IMAGE_TAG`, restart (migrations first), and wait for
+`/health/ready`. If the new version isn't ready within 90 seconds, it goes
+back to the previous one. The workflow's SSH key can run nothing but
+`deploy.sh`, and only with a tag CI published. A deploy changes only the
+images; when `compose.yaml`, the `Caddyfile` or the scripts change, copy
+them to the server by hand. By hand on the server: `bash deploy.sh sha-<commit>`.
+
 ### Backups
 
 Every night a systemd timer runs [`backup.sh`](./deploy/server/backup.sh): a
@@ -372,6 +389,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0028 — Rate limiting and forwarded headers](./docs/adr/0028-rate-limiting-and-forwarded-headers.md)
 - [0029 — HTTPS with Caddy on a DuckDNS name](./docs/adr/0029-https-with-caddy-on-a-duckdns-name.md)
 - [0030 — Database backups to Object Storage](./docs/adr/0030-database-backups-to-object-storage.md)
+- [0031 — Deploying from GitHub Actions over SSH](./docs/adr/0031-deploying-from-github-actions-over-ssh.md)
 
 ## License
 

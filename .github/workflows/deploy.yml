@@ -1,0 +1,58 @@
+name: Deploy
+
+# Puts a master build on the server once CI has published its images. The
+# job waits for approval on the "production" environment, then asks
+# deploy.sh on the server to switch to that build. It runs after merging, so
+# it is not a required check.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
+
+# The job calls no GitHub API and checks out no code.
+permissions: {}
+
+# Deploys queue one after another; a running deploy is never cancelled.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # A pull request's CI run also completes, but publishes no images; and a
+    # failed CI run must never deploy.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: ${{ vars.PUBLIC_URL }}
+    steps:
+      # The same tag CI gave the images: "sha-" and the commit's first 7 characters.
+      - name: Image tag
+        id: tag
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: echo "tag=sha-${HEAD_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      # The key can only run deploy.sh on the server (a forced command), and
+      # the server's host key is pinned, so a machine pretending to be the
+      # server is refused instead of trusted on first sight.
+      - name: Deploy over SSH
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          install -m 700 -d ~/.ssh
+          install -m 600 /dev/null ~/.ssh/deploy_key
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy_key \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            "ubuntu@$HOST" "$TAG"
