@@ -280,6 +280,9 @@ certificate it obtains and renews by itself, and forwards to the Api
 ([ADR 0029](./docs/adr/0029-https-with-caddy-on-a-duckdns-name.md)). The
 RabbitMQ management UI is reachable only through an SSH tunnel.
 
+Day-to-day commands -- checking health, deploying, backups, rotating keys,
+troubleshooting -- are in the [operations runbook](./docs/operations.md).
+
 ### Deploys
 
 When CI passes on `master`, the
