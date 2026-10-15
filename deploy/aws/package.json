@@ -1,0 +1,8 @@
+{
+  "name": "finance-tracker-aws",
+  "private": true,
+  "description": "Pins the AWS CDK command-line tool; run it with npx cdk.",
+  "devDependencies": {
+    "aws-cdk": "2.1145.0"
+  }
+}
