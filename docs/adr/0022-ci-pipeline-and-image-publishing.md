@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted
+Accepted. Decision 6 is amended by
+[ADR 0031](./0031-deploying-from-github-actions-over-ssh.md): master builds
+are now deployed to the server, after approval.
 
 ## Context
 
