@@ -102,7 +102,11 @@ namespace FinanceTracker.Aws
                 PortMappings = new IPortMapping[] { new PortMapping { ContainerPort = RabbitMqPort } },
                 HealthCheck = new Amazon.CDK.AWS.ECS.HealthCheck
                 {
-                    Command = new[] { "CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity" },
+                    // As the rabbitmq user, not root: ECS runs the first check
+                    // while the broker is still starting, and a check run as
+                    // root creates the Erlang cookie file owned by root, which
+                    // the broker then can't read and refuses to boot.
+                    Command = new[] { "CMD", "gosu", "rabbitmq", "rabbitmq-diagnostics", "-q", "check_port_connectivity" },
                     Interval = Duration.Seconds(10),
                     Timeout = Duration.Seconds(5),
                     Retries = 10,
