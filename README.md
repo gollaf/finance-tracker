@@ -355,7 +355,7 @@ part of the app. From `deploy/aws`:
 ```bash
 npm ci                                                # installs the pinned CDK CLI
 npx cdk bootstrap                                     # once per account and region
-npx cdk diff --all -c imageTag=sha-1234567            # shows what a deploy would change
+npx cdk diff -c imageTag=sha-1234567                  # shows what a deploy would change, for every stack
 npx cdk deploy --all -c imageTag=sha-1234567
 npx cdk destroy FinanceTracker-App -c imageTag=sha-1234567
 npx cdk destroy FinanceTracker-Data                   # deletes the database and its data
