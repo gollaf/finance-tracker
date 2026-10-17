@@ -1,26 +1,36 @@
 using System.Text.RegularExpressions;
 using Amazon.CDK;
+using Amazon.CDK.AWS.CloudFront;
 using Amazon.CDK.AWS.EC2;
 using Amazon.CDK.AWS.ECS;
+using Amazon.CDK.AWS.ElasticLoadBalancingV2;
 using Amazon.CDK.AWS.Logs;
 using Amazon.CDK.AWS.SecretsManager;
 using Amazon.CDK.AWS.ServiceDiscovery;
+using Amazon.CDK.CustomResources;
 using Constructs;
+using Distribution = Amazon.CDK.AWS.CloudFront.Distribution;
+using EcsHealthCheck = Amazon.CDK.AWS.ECS.HealthCheck;
 using EcsSecret = Amazon.CDK.AWS.ECS.Secret;
+using LoadBalancerHealthCheck = Amazon.CDK.AWS.ElasticLoadBalancingV2.HealthCheck;
 using SecretsManagerSecret = Amazon.CDK.AWS.SecretsManager.Secret;
+using VpcOrigin = Amazon.CDK.AWS.CloudFront.Origins.VpcOrigin;
+using VpcOriginWithEndpointProps = Amazon.CDK.AWS.CloudFront.Origins.VpcOriginWithEndpointProps;
 
 namespace FinanceTracker.Aws
 {
     /// <summary>
-    /// The running system: an ECS cluster on Fargate with RabbitMQ and the
-    /// Worker. It holds no data of its own, so it can be destroyed whenever
-    /// the system isn't needed and deployed again from the same images.
+    /// The running system: an ECS cluster on Fargate with RabbitMQ, the
+    /// Worker and the Api, which the internet reaches through CloudFront. It
+    /// holds no data of its own, so it can be destroyed whenever the system
+    /// isn't needed and deployed again from the same images.
     /// </summary>
     public sealed class AppStack : Stack
     {
         private const string Namespace = "finance-tracker.local";
         private const string RabbitMqUser = "financetracker";
         private const int RabbitMqPort = 5672;
+        private const int ApiPort = 8080;
 
         public AppStack(Construct scope, string id, AppStackProps props)
             : base(scope, id, Validated(props))
@@ -52,9 +62,19 @@ namespace FinanceTracker.Aws
 
             var rabbitMq = AddRabbitMq(cluster, data, rabbitMqSecret);
             var worker = AddWorker(cluster, data, props.ImageTag, rabbitMqSecret);
+            var api = AddApi(cluster, data, props.ImageTag);
 
             rabbitMq.Connections.AllowFrom(worker, Port.Tcp(RabbitMqPort), "AMQP from the Worker");
             AllowDatabaseFrom(data, worker, "DatabaseFromWorker", "PostgreSQL from the Worker");
+            AllowDatabaseFrom(data, api, "DatabaseFromApi", "PostgreSQL from the Api");
+
+            var distribution = AddPublicEndpoint(data, api);
+
+            _ = new CfnOutput(this, "ApiUrl", new CfnOutputProps
+            {
+                Value = $"https://{distribution.DistributionDomainName}",
+                Description = "Public HTTPS address of the Api",
+            });
         }
 
         private static AppStackProps Validated(AppStackProps props)
@@ -100,7 +120,7 @@ namespace FinanceTracker.Aws
                     ["RABBITMQ_DEFAULT_PASS"] = EcsSecret.FromSecretsManager(password),
                 },
                 PortMappings = new IPortMapping[] { new PortMapping { ContainerPort = RabbitMqPort } },
-                HealthCheck = new Amazon.CDK.AWS.ECS.HealthCheck
+                HealthCheck = new EcsHealthCheck
                 {
                     // As the rabbitmq user, not root: ECS runs the first check
                     // while the broker is still starting, and a check run as
@@ -125,12 +145,6 @@ namespace FinanceTracker.Aws
 
         private FargateService AddWorker(Cluster cluster, DataStack data, string imageTag, SecretsManagerSecret rabbitMqPassword)
         {
-            // No password here: Npgsql reads it from the PGPASSWORD
-            // environment variable, which ECS fills from Secrets Manager.
-            var connectionString =
-                $"Host={data.Database.DbInstanceEndpointAddress};Port=5432;Database=financetracker;Username=financetracker";
-            var databasePassword = EcsSecret.FromSecretsManager(data.Database.Secret!, "password");
-
             var task = new FargateTaskDefinition(this, "WorkerTask", new FargateTaskDefinitionProps
             {
                 Cpu = 256,
@@ -139,22 +153,7 @@ namespace FinanceTracker.Aws
             });
 
             var logs = Logs("worker");
-
-            // Runs the Api image's "migrate" command and exits; the Worker
-            // starts only if it succeeded.
-            var migrate = task.AddContainer("migrate", new ContainerDefinitionOptions
-            {
-                Image = ContainerImage.FromRegistry($"ghcr.io/gollaf/finance-tracker-api:{imageTag}"),
-                Command = new[] { "migrate" },
-                Essential = false,
-                Environment = new Dictionary<string, string>
-                {
-                    ["ASPNETCORE_ENVIRONMENT"] = "Production",
-                    ["ConnectionStrings__FinanceTracker"] = connectionString,
-                },
-                Secrets = new Dictionary<string, EcsSecret> { ["PGPASSWORD"] = databasePassword },
-                Logging = logs,
-            });
+            var migrate = AddMigrations(task, data, imageTag, logs);
 
             var worker = task.AddContainer("worker", new ContainerDefinitionOptions
             {
@@ -162,13 +161,13 @@ namespace FinanceTracker.Aws
                 Environment = new Dictionary<string, string>
                 {
                     ["DOTNET_ENVIRONMENT"] = "Production",
-                    ["ConnectionStrings__FinanceTracker"] = connectionString,
+                    ["ConnectionStrings__FinanceTracker"] = ConnectionString(data),
                     ["RabbitMq__Host"] = $"rabbitmq.{Namespace}",
                     ["RabbitMq__UserName"] = RabbitMqUser,
                 },
                 Secrets = new Dictionary<string, EcsSecret>
                 {
-                    ["PGPASSWORD"] = databasePassword,
+                    ["PGPASSWORD"] = DatabasePassword(data),
                     ["RabbitMq__Password"] = EcsSecret.FromSecretsManager(rabbitMqPassword),
                 },
                 // Longer than the .NET host's 30-second shutdown timeout.
@@ -183,6 +182,212 @@ namespace FinanceTracker.Aws
 
             return SingleTaskService("Worker", cluster, data, task, cloudMap: null);
         }
+
+        private FargateService AddApi(Cluster cluster, DataStack data, string imageTag)
+        {
+            var task = new FargateTaskDefinition(this, "ApiTask", new FargateTaskDefinitionProps
+            {
+                Cpu = 256,
+                MemoryLimitMiB = 512,
+                RuntimePlatform = Arm64(),
+            });
+
+            var logs = Logs("api");
+            var migrate = AddMigrations(task, data, imageTag, logs);
+
+            var api = task.AddContainer("api", new ContainerDefinitionOptions
+            {
+                Image = ContainerImage.FromRegistry($"ghcr.io/gollaf/finance-tracker-api:{imageTag}"),
+                Environment = new Dictionary<string, string>
+                {
+                    ["ASPNETCORE_ENVIRONMENT"] = "Production",
+                    // Production hides exception details; the docs stay on for reviewers.
+                    ["ApiDocs__Enabled"] = "true",
+                    ["Database__ApplyMigrationsOnStartup"] = "false",
+                    ["ConnectionStrings__FinanceTracker"] = ConnectionString(data),
+                    // Requests arrive from the load balancer inside the VPC;
+                    // only those may say who the visitor is.
+                    ["ReverseProxy__TrustedNetworks__0"] = DataStack.NetworkCidr,
+                    ["ReverseProxy__ForwardedForHeader"] = "CloudFront-Viewer-Address",
+                    ["ReverseProxy__ForwardedProtoHeader"] = "CloudFront-Forwarded-Proto",
+                },
+                Secrets = new Dictionary<string, EcsSecret> { ["PGPASSWORD"] = DatabasePassword(data) },
+                PortMappings = new IPortMapping[] { new PortMapping { ContainerPort = ApiPort } },
+                Logging = logs,
+            });
+            api.AddContainerDependencies(new ContainerDependency
+            {
+                Container = migrate,
+                Condition = ContainerDependencyCondition.SUCCESS,
+            });
+
+            var securityGroup = new SecurityGroup(this, "ApiSecurityGroup", new SecurityGroupProps
+            {
+                Vpc = data.Vpc,
+                Description = "Api; inbound rules are added per client",
+            });
+
+            return new FargateService(this, "Api", new FargateServiceProps
+            {
+                Cluster = cluster,
+                TaskDefinition = task,
+                DesiredCount = 1,
+                // The new task must pass the load balancer's health check
+                // before the old one stops, so a deploy has no gap.
+                MinHealthyPercent = 100,
+                MaxHealthyPercent = 200,
+                CircuitBreaker = new DeploymentCircuitBreaker { Rollback = true },
+                // Migrations run before the Api starts; failed health checks
+                // don't count against the task meanwhile.
+                HealthCheckGracePeriod = Duration.Seconds(120),
+                AssignPublicIp = true,
+                VpcSubnets = new SubnetSelection { SubnetType = SubnetType.PUBLIC },
+                SecurityGroups = new ISecurityGroup[] { securityGroup },
+            });
+        }
+
+        // The internet reaches the Api only through CloudFront: HTTPS on a
+        // cloudfront.net address, then over AWS's network to a load balancer
+        // that has no public address at all.
+        private Distribution AddPublicEndpoint(DataStack data, FargateService api)
+        {
+            var securityGroup = new SecurityGroup(this, "LoadBalancerSecurityGroup", new SecurityGroupProps
+            {
+                Vpc = data.Vpc,
+                Description = "Load balancer; only CloudFront connects",
+            });
+
+            var loadBalancer = new ApplicationLoadBalancer(this, "LoadBalancer", new ApplicationLoadBalancerProps
+            {
+                Vpc = data.Vpc,
+                InternetFacing = false,
+                // Like the database: no route to or from the internet.
+                VpcSubnets = new SubnetSelection { SubnetType = SubnetType.PRIVATE_ISOLATED },
+                SecurityGroup = securityGroup,
+            });
+
+            // Not open to everyone: the only inbound rule is CloudFront's, below.
+            var listener = loadBalancer.AddListener("Http", new BaseApplicationListenerProps { Port = 80, Open = false });
+            listener.AddTargets("Api", new AddApplicationTargetsProps
+            {
+                Port = ApiPort,
+                Protocol = ApplicationProtocol.HTTP,
+                Targets = new IApplicationLoadBalancerTarget[] { api },
+                HealthCheck = new LoadBalancerHealthCheck
+                {
+                    Path = "/health/ready",
+                    Interval = Duration.Seconds(15),
+                    HealthyThresholdCount = 2,
+                },
+                // A stopping task gets 30 seconds to finish its requests,
+                // not the default five minutes.
+                DeregistrationDelay = Duration.Seconds(30),
+            });
+
+            var distribution = new Distribution(this, "Distribution", new DistributionProps
+            {
+                Comment = "Finance Tracker Api",
+                DefaultBehavior = new BehaviorOptions
+                {
+                    // A VPC origin: CloudFront connects to the load balancer
+                    // inside the VPC. Plain HTTP, because a certificate needs
+                    // a domain of our own; this hop stays on AWS's network.
+                    Origin = VpcOrigin.WithApplicationLoadBalancer(loadBalancer, new VpcOriginWithEndpointProps
+                    {
+                        ProtocolPolicy = OriginProtocolPolicy.HTTP_ONLY,
+                    }),
+                    ViewerProtocolPolicy = ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                    AllowedMethods = AllowedMethods.ALLOW_ALL,
+                    // Every response depends on who asks: nothing is cached.
+                    CachePolicy = CachePolicy.CACHING_DISABLED,
+                    // All of the visitor's headers, Authorization and Host
+                    // included, plus CloudFront's own: the visitor's address
+                    // and scheme.
+                    OriginRequestPolicy = OriginRequestPolicy.ALL_VIEWER_AND_CLOUDFRONT_2022,
+                },
+                // Edge locations in Europe and North America only.
+                PriceClass = PriceClass.PRICE_CLASS_100,
+                // CloudFront documents the visitor-address header for IPv4;
+                // IPv6 visitors would need a format the Api can't rely on.
+                EnableIpv6 = false,
+            });
+
+            // CloudFront connects from a security group it creates itself for
+            // the VPC origin. CloudFormation doesn't return that group's ID, so
+            // a one-off lookup finds it, and only that group is let in.
+            var lookup = new AwsCustomResource(this, "VpcOriginsSecurityGroupLookup", new AwsCustomResourceProps
+            {
+                OnCreate = new AwsSdkCall
+                {
+                    Service = "ec2",
+                    Action = "describeSecurityGroups",
+                    Parameters = new Dictionary<string, object>
+                    {
+                        ["Filters"] = new object[]
+                        {
+                            new Dictionary<string, object> { ["Name"] = "vpc-id", ["Values"] = new object[] { data.Vpc.VpcId } },
+                            new Dictionary<string, object>
+                            {
+                                ["Name"] = "group-name",
+                                ["Values"] = new object[] { "CloudFront-VPCOrigins-Service-SG" },
+                            },
+                        },
+                    },
+                    PhysicalResourceId = PhysicalResourceId.Of("CloudFront-VPCOrigins-Service-SG"),
+                },
+                Policy = AwsCustomResourcePolicy.FromSdkCalls(new SdkCallsPolicyOptions
+                {
+                    Resources = AwsCustomResourcePolicy.ANY_RESOURCE,
+                }),
+                LogGroup = new LogGroup(this, "vpc-origins-lookup-logs", new LogGroupProps
+                {
+                    Retention = RetentionDays.ONE_WEEK,
+                    RemovalPolicy = RemovalPolicy.DESTROY,
+                }),
+            });
+            // The group exists once the distribution and its VPC origin do.
+            lookup.Node.AddDependency(distribution);
+
+            _ = new CfnSecurityGroupIngress(this, "LoadBalancerFromCloudFront", new CfnSecurityGroupIngressProps
+            {
+                GroupId = securityGroup.SecurityGroupId,
+                SourceSecurityGroupId = lookup.GetResponseField("SecurityGroups.0.GroupId"),
+                IpProtocol = "tcp",
+                FromPort = 80,
+                ToPort = 80,
+                Description = "HTTP from CloudFront",
+            });
+
+            return distribution;
+        }
+
+        // Runs the Api image's "migrate" command and exits; the task's main
+        // container starts only if it succeeded.
+        private static ContainerDefinition AddMigrations(
+            FargateTaskDefinition task, DataStack data, string imageTag, LogDriver logs)
+        {
+            return task.AddContainer("migrate", new ContainerDefinitionOptions
+            {
+                Image = ContainerImage.FromRegistry($"ghcr.io/gollaf/finance-tracker-api:{imageTag}"),
+                Command = new[] { "migrate" },
+                Essential = false,
+                Environment = new Dictionary<string, string>
+                {
+                    ["ASPNETCORE_ENVIRONMENT"] = "Production",
+                    ["ConnectionStrings__FinanceTracker"] = ConnectionString(data),
+                },
+                Secrets = new Dictionary<string, EcsSecret> { ["PGPASSWORD"] = DatabasePassword(data) },
+                Logging = logs,
+            });
+        }
+
+        // No password here: Npgsql reads it from the PGPASSWORD environment
+        // variable, which ECS fills from Secrets Manager.
+        private static string ConnectionString(DataStack data) =>
+            $"Host={data.Database.DbInstanceEndpointAddress};Port=5432;Database=financetracker;Username=financetracker";
+
+        private static EcsSecret DatabasePassword(DataStack data) =>
+            EcsSecret.FromSecretsManager(data.Database.Secret!, "password");
 
         private FargateService SingleTaskService(
             string id, Cluster cluster, DataStack data, FargateTaskDefinition task, CloudMapOptions? cloudMap)
