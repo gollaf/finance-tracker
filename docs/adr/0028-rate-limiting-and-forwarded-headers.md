@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted
+Accepted. Amended by [ADR 0034](./0034-public-https-through-cloudfront-and-an-internal-load-balancer.md):
+the forwarded headers to read can be configured.
 
 ## Context
 
