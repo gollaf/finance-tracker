@@ -7,6 +7,7 @@ namespace FinanceTracker.Aws.Tests
     public sealed class AppStackFixture
     {
         public const string ImageTag = "sha-1234567";
+        public const string AlarmEmail = "alarms@example.com";
 
         public AppStackFixture()
         {
@@ -16,6 +17,7 @@ namespace FinanceTracker.Aws.Tests
             {
                 Data = data,
                 ImageTag = ImageTag,
+                AlarmEmail = AlarmEmail,
             }));
         }
 

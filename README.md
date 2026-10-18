@@ -368,6 +368,21 @@ npx cdk destroy FinanceTracker-Data                   # deletes the database and
 The services' output is in CloudWatch:
 `aws logs tail /finance-tracker/api --follow` (or `worker`, `rabbitmq`).
 
+**Monitoring** ([ADR 0035](./docs/adr/0035-monitoring-on-aws-with-cloudwatch.md)):
+the .NET services log JSON on AWS, CloudWatch counts the errors they log,
+five alarms watch the Api, the Worker and the database, and the
+`FinanceTracker` dashboard shows it all. Alarms are e-mailed to the
+address given as `alarmEmail` context -- kept out of the repository in
+`~/.cdk.json`:
+
+```json
+{ "context": { "alarmEmail": "you@example.com" } }
+```
+
+AWS first sends a confirmation e-mail; alarms arrive once its link is
+clicked. The latest errors: Logs Insights, saved query
+`finance-tracker/errors`.
+
 ## Roadmap
 
 Done: domain and use cases, persistence and API, Docker, AI insights,
@@ -434,6 +449,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0032 — AWS deployment with the CDK, Fargate and RDS](./docs/adr/0032-aws-deployment-with-cdk-fargate-and-rds.md)
 - [0033 — Services on ECS: discovery, migrations and secrets](./docs/adr/0033-services-on-ecs-discovery-migrations-and-secrets.md)
 - [0034 — Public HTTPS through CloudFront and an internal load balancer](./docs/adr/0034-public-https-through-cloudfront-and-an-internal-load-balancer.md)
+- [0035 — Monitoring on AWS with CloudWatch](./docs/adr/0035-monitoring-on-aws-with-cloudwatch.md)
 
 ## License
 
