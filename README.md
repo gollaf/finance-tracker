@@ -383,6 +383,12 @@ AWS first sends a confirmation e-mail; alarms arrive once its link is
 clicked. The latest errors: Logs Insights, saved query
 `finance-tracker/errors`.
 
+Deploys run from the laptop: the account's AWS-managed policies don't
+allow GitHub Actions to sign in without a stored key
+([ADR 0036](./docs/adr/0036-aws-deploys-from-the-laptop.md)). Tearing down,
+checking that nothing is left running and the end-of-sprint cleanup are in
+the [AWS runbook](./docs/aws-operations.md).
+
 ## Roadmap
 
 Done: domain and use cases, persistence and API, Docker, AI insights,
@@ -450,6 +456,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0033 — Services on ECS: discovery, migrations and secrets](./docs/adr/0033-services-on-ecs-discovery-migrations-and-secrets.md)
 - [0034 — Public HTTPS through CloudFront and an internal load balancer](./docs/adr/0034-public-https-through-cloudfront-and-an-internal-load-balancer.md)
 - [0035 — Monitoring on AWS with CloudWatch](./docs/adr/0035-monitoring-on-aws-with-cloudwatch.md)
+- [0036 — AWS deploys from the laptop](./docs/adr/0036-aws-deploys-from-the-laptop.md)
 
 ## License
 
