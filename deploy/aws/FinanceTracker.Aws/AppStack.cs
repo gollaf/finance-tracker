@@ -22,9 +22,10 @@ namespace FinanceTracker.Aws
 {
     /// <summary>
     /// The running system: an ECS cluster on Fargate with RabbitMQ, the
-    /// Worker and the Api, which the internet reaches through CloudFront. It
-    /// holds no data of its own, so it can be destroyed whenever the system
-    /// isn't needed and deployed again from the same images.
+    /// Worker and the Api, which the internet reaches through CloudFront, all
+    /// watched by CloudWatch. It holds no data of its own, so it can be
+    /// destroyed whenever the system isn't needed and deployed again from the
+    /// same images.
     /// </summary>
     public sealed class AppStack : Stack
     {
@@ -61,15 +62,21 @@ namespace FinanceTracker.Aws
                 RemovalPolicy = RemovalPolicy.DESTROY,
             });
 
+            var workerLogs = NewLogGroup("worker");
+            var apiLogs = NewLogGroup("api");
+
             var rabbitMq = AddRabbitMq(cluster, data, rabbitMqSecret);
-            var worker = AddWorker(cluster, data, props.ImageTag, rabbitMqSecret);
-            var api = AddApi(cluster, data, props.ImageTag);
+            var worker = AddWorker(cluster, data, props.ImageTag, rabbitMqSecret, workerLogs);
+            var api = AddApi(cluster, data, props.ImageTag, apiLogs);
 
             rabbitMq.Connections.AllowFrom(worker, Port.Tcp(RabbitMqPort), "AMQP from the Worker");
             AllowDatabaseFrom(data, worker, "DatabaseFromWorker", "PostgreSQL from the Worker");
             AllowDatabaseFrom(data, api, "DatabaseFromApi", "PostgreSQL from the Api");
 
-            var distribution = AddPublicEndpoint(data, api);
+            var (distribution, apiTargets) = AddPublicEndpoint(data, api);
+
+            _ = new Monitoring(this, "Monitoring", new MonitoredSystem(
+                data, api, worker, rabbitMq, apiTargets, distribution, apiLogs, workerLogs, props.AlarmEmail));
 
             _ = new CfnOutput(this, "ApiUrl", new CfnOutputProps
             {
@@ -87,6 +94,14 @@ namespace FinanceTracker.Aws
             {
                 throw new ArgumentException(
                     $"Expected an image tag like sha-1234567, got '{props.ImageTag}'.", nameof(props));
+            }
+
+            // Checked here: a malformed address would only fail halfway
+            // through a deploy, when the subscription is created.
+            if (props.AlarmEmail is not null && !Regex.IsMatch(props.AlarmEmail, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
+            {
+                throw new ArgumentException(
+                    $"Expected an e-mail address for the alarms, got '{props.AlarmEmail}'.", nameof(props));
             }
 
             return props;
@@ -133,7 +148,7 @@ namespace FinanceTracker.Aws
                     Retries = 10,
                     StartPeriod = Duration.Seconds(30),
                 },
-                Logging = Logs("rabbitmq"),
+                Logging = LogsTo(NewLogGroup("rabbitmq"), "rabbitmq"),
             });
 
             return SingleTaskService("RabbitMq", cluster, data, task, new CloudMapOptions
@@ -144,7 +159,8 @@ namespace FinanceTracker.Aws
             });
         }
 
-        private FargateService AddWorker(Cluster cluster, DataStack data, string imageTag, SecretsManagerSecret rabbitMqPassword)
+        private FargateService AddWorker(
+            Cluster cluster, DataStack data, string imageTag, SecretsManagerSecret rabbitMqPassword, LogGroup logGroup)
         {
             var task = new FargateTaskDefinition(this, "WorkerTask", new FargateTaskDefinitionProps
             {
@@ -153,19 +169,19 @@ namespace FinanceTracker.Aws
                 RuntimePlatform = Arm64(),
             });
 
-            var logs = Logs("worker");
+            var logs = LogsTo(logGroup, "worker");
             var migrate = AddMigrations(task, data, imageTag, logs);
 
             var worker = task.AddContainer("worker", new ContainerDefinitionOptions
             {
                 Image = ContainerImage.FromRegistry($"ghcr.io/gollaf/finance-tracker-worker:{imageTag}"),
-                Environment = new Dictionary<string, string>
+                Environment = WithJsonLogs(new Dictionary<string, string>
                 {
                     ["DOTNET_ENVIRONMENT"] = "Production",
                     ["ConnectionStrings__FinanceTracker"] = ConnectionString(data),
                     ["RabbitMq__Host"] = $"rabbitmq.{Namespace}",
                     ["RabbitMq__UserName"] = RabbitMqUser,
-                },
+                }),
                 Secrets = new Dictionary<string, EcsSecret>
                 {
                     ["PGPASSWORD"] = DatabasePassword(data),
@@ -184,7 +200,7 @@ namespace FinanceTracker.Aws
             return SingleTaskService("Worker", cluster, data, task, cloudMap: null);
         }
 
-        private FargateService AddApi(Cluster cluster, DataStack data, string imageTag)
+        private FargateService AddApi(Cluster cluster, DataStack data, string imageTag, LogGroup logGroup)
         {
             var task = new FargateTaskDefinition(this, "ApiTask", new FargateTaskDefinitionProps
             {
@@ -193,13 +209,13 @@ namespace FinanceTracker.Aws
                 RuntimePlatform = Arm64(),
             });
 
-            var logs = Logs("api");
+            var logs = LogsTo(logGroup, "api");
             var migrate = AddMigrations(task, data, imageTag, logs);
 
             var api = task.AddContainer("api", new ContainerDefinitionOptions
             {
                 Image = ContainerImage.FromRegistry($"ghcr.io/gollaf/finance-tracker-api:{imageTag}"),
-                Environment = new Dictionary<string, string>
+                Environment = WithJsonLogs(new Dictionary<string, string>
                 {
                     ["ASPNETCORE_ENVIRONMENT"] = "Production",
                     // Production hides exception details; the docs stay on for reviewers.
@@ -211,7 +227,7 @@ namespace FinanceTracker.Aws
                     ["ReverseProxy__TrustedNetworks__0"] = DataStack.NetworkCidr,
                     ["ReverseProxy__ForwardedForHeader"] = "CloudFront-Viewer-Address",
                     ["ReverseProxy__ForwardedProtoHeader"] = "CloudFront-Forwarded-Proto",
-                },
+                }),
                 Secrets = new Dictionary<string, EcsSecret> { ["PGPASSWORD"] = DatabasePassword(data) },
                 PortMappings = new IPortMapping[] { new PortMapping { ContainerPort = ApiPort } },
                 Logging = logs,
@@ -250,7 +266,7 @@ namespace FinanceTracker.Aws
         // The internet reaches the Api only through CloudFront: HTTPS on a
         // cloudfront.net address, then over AWS's network to a load balancer
         // that has no public address at all.
-        private Distribution AddPublicEndpoint(DataStack data, FargateService api)
+        private (Distribution Distribution, ApplicationTargetGroup ApiTargets) AddPublicEndpoint(DataStack data, FargateService api)
         {
             var securityGroup = new SecurityGroup(this, "LoadBalancerSecurityGroup", new SecurityGroupProps
             {
@@ -269,7 +285,7 @@ namespace FinanceTracker.Aws
 
             // Not open to everyone: the only inbound rule is CloudFront's, below.
             var listener = loadBalancer.AddListener("Http", new BaseApplicationListenerProps { Port = 80, Open = false });
-            listener.AddTargets("Api", new AddApplicationTargetsProps
+            var apiTargets = listener.AddTargets("Api", new AddApplicationTargetsProps
             {
                 Port = ApiPort,
                 Protocol = ApplicationProtocol.HTTP,
@@ -359,7 +375,7 @@ namespace FinanceTracker.Aws
                 Description = "HTTP from CloudFront",
             });
 
-            return distribution;
+            return (distribution, apiTargets);
         }
 
         // Runs the Api image's "migrate" command and exits; the task's main
@@ -372,11 +388,11 @@ namespace FinanceTracker.Aws
                 Image = ContainerImage.FromRegistry($"ghcr.io/gollaf/finance-tracker-api:{imageTag}"),
                 Command = new[] { "migrate" },
                 Essential = false,
-                Environment = new Dictionary<string, string>
+                Environment = WithJsonLogs(new Dictionary<string, string>
                 {
                     ["ASPNETCORE_ENVIRONMENT"] = "Production",
                     ["ConnectionStrings__FinanceTracker"] = ConnectionString(data),
-                },
+                }),
                 Secrets = new Dictionary<string, EcsSecret> { ["PGPASSWORD"] = DatabasePassword(data) },
                 Logging = logs,
             });
@@ -436,16 +452,24 @@ namespace FinanceTracker.Aws
             });
         }
 
-        private LogDriver Logs(string name)
+        private LogGroup NewLogGroup(string name) => new(this, $"{name}-logs", new LogGroupProps
         {
-            var logGroup = new LogGroup(this, $"{name}-logs", new LogGroupProps
-            {
-                LogGroupName = $"/finance-tracker/{name}",
-                Retention = RetentionDays.ONE_WEEK,
-                RemovalPolicy = RemovalPolicy.DESTROY,
-            });
+            LogGroupName = $"/finance-tracker/{name}",
+            Retention = RetentionDays.ONE_WEEK,
+            RemovalPolicy = RemovalPolicy.DESTROY,
+        });
 
-            return LogDrivers.AwsLogs(new AwsLogDriverProps { LogGroup = logGroup, StreamPrefix = name });
+        private static LogDriver LogsTo(LogGroup logGroup, string streamPrefix) =>
+            LogDrivers.AwsLogs(new AwsLogDriverProps { LogGroup = logGroup, StreamPrefix = streamPrefix });
+
+        // The console logger's JSON format, switched on by configuration:
+        // every line becomes an object whose fields (LogLevel, Category,
+        // Message, the request's scopes) CloudWatch can filter on.
+        private static Dictionary<string, string> WithJsonLogs(Dictionary<string, string> environment)
+        {
+            environment["Logging__Console__FormatterName"] = "json";
+            environment["Logging__Console__FormatterOptions__IncludeScopes"] = "true";
+            return environment;
         }
 
         // The images are built for arm64 too, and Fargate's Graviton

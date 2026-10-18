@@ -22,6 +22,9 @@ if (app.Node.TryGetContext("imageTag") is string imageTag)
     {
         Data = data,
         ImageTag = imageTag,
+        // Kept out of the repository: pass it with -c alarmEmail=... or put
+        // it in the "context" of ~/.cdk.json.
+        AlarmEmail = app.Node.TryGetContext("alarmEmail") as string,
         Description = "Finance Tracker: containers on ECS Fargate",
     });
 }
