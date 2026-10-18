@@ -342,10 +342,14 @@ Two stacks:
 
 - `FinanceTracker-Data` -- the network (public subnets and isolated ones,
   no NAT gateway) and PostgreSQL on RDS.
-- `FinanceTracker-App` -- an ECS cluster on Fargate running RabbitMQ and
-  the Worker, which migrates the database before it starts
-  ([ADR 0033](./docs/adr/0033-services-on-ecs-discovery-migrations-and-secrets.md)).
-  It holds no data, so it can be destroyed whenever it isn't needed.
+- `FinanceTracker-App` -- an ECS cluster on Fargate running RabbitMQ, the
+  Worker and the Api; each of the last two migrates the database before it
+  starts ([ADR 0033](./docs/adr/0033-services-on-ecs-discovery-migrations-and-secrets.md)).
+  The Api is reached over HTTPS through CloudFront, which connects to an
+  internal load balancer
+  ([ADR 0034](./docs/adr/0034-public-https-through-cloudfront-and-an-internal-load-balancer.md));
+  the deploy prints its address as `ApiUrl`. The stack holds no data, so it
+  can be destroyed whenever it isn't needed.
 
 Requires .NET 10, Node.js 20 or newer and the AWS CLI, signed in with
 `aws login`. The application stack runs one build CI published, chosen
@@ -362,7 +366,7 @@ npx cdk destroy FinanceTracker-Data                   # deletes the database and
 ```
 
 The services' output is in CloudWatch:
-`aws logs tail /finance-tracker/worker --follow`.
+`aws logs tail /finance-tracker/api --follow` (or `worker`, `rabbitmq`).
 
 ## Roadmap
 
@@ -429,6 +433,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0031 — Deploying from GitHub Actions over SSH](./docs/adr/0031-deploying-from-github-actions-over-ssh.md)
 - [0032 — AWS deployment with the CDK, Fargate and RDS](./docs/adr/0032-aws-deployment-with-cdk-fargate-and-rds.md)
 - [0033 — Services on ECS: discovery, migrations and secrets](./docs/adr/0033-services-on-ecs-discovery-migrations-and-secrets.md)
+- [0034 — Public HTTPS through CloudFront and an internal load balancer](./docs/adr/0034-public-https-through-cloudfront-and-an-internal-load-balancer.md)
 
 ## License
 

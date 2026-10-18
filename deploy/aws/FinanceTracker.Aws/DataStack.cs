@@ -13,12 +13,15 @@ namespace FinanceTracker.Aws
     /// </summary>
     public sealed class DataStack : Stack
     {
+        /// <summary>The VPC's address range.</summary>
+        public const string NetworkCidr = "10.20.0.0/16";
+
         public DataStack(Construct scope, string id, IStackProps? props = null)
             : base(scope, id, props)
         {
             var vpc = new Vpc(this, "Network", new VpcProps
             {
-                IpAddresses = IpAddresses.Cidr("10.20.0.0/16"),
+                IpAddresses = IpAddresses.Cidr(NetworkCidr),
                 // An RDS subnet group must span two availability zones, even
                 // for a single-zone database.
                 MaxAzs = 2,
