@@ -14,7 +14,8 @@ using EcsHealthCheck = Amazon.CDK.AWS.ECS.HealthCheck;
 using EcsSecret = Amazon.CDK.AWS.ECS.Secret;
 using LoadBalancerHealthCheck = Amazon.CDK.AWS.ElasticLoadBalancingV2.HealthCheck;
 using SecretsManagerSecret = Amazon.CDK.AWS.SecretsManager.Secret;
-using VpcOrigin = Amazon.CDK.AWS.CloudFront.Origins.VpcOrigin;
+// The C# version of the CDK names the origins class VpcOrigin_.
+using VpcOrigin = Amazon.CDK.AWS.CloudFront.Origins.VpcOrigin_;
 using VpcOriginWithEndpointProps = Amazon.CDK.AWS.CloudFront.Origins.VpcOriginWithEndpointProps;
 
 namespace FinanceTracker.Aws
