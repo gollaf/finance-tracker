@@ -52,6 +52,8 @@ services:
       # A real secret, so never hardcoded: read from the shell or a
       # gitignored .env file (GROQ_API_KEY=gsk_...). Optional.
       Groq__ApiKey: ${GROQ_API_KEY:-}
+      # Traces, metrics and logs go to the dashboard below.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://aspire-dashboard:18889
     ports:
       - "5000:8080"
     depends_on:
@@ -72,11 +74,25 @@ services:
       RabbitMq__Password: financetracker
       # For AI categorization. Unset, transactions stay uncategorized.
       Groq__ApiKey: ${GROQ_API_KEY:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://aspire-dashboard:18889
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+
+  # The Aspire Dashboard, standalone: shows the Api's and the Worker's
+  # traces, metrics and logs at http://localhost:18888. It keeps them in
+  # memory only, so restarting it empties it. Its OTLP port, 18889, is
+  # reached by the other containers and isn't published.
+  aspire-dashboard:
+    image: mcr.microsoft.com/aspire/dashboard:13.6.1
+    environment:
+      # No sign-in to the UI and no key for sending telemetry. Local
+      # development only.
+      ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"
+    ports:
+      - "18888:18888"
 
 volumes:
   postgres-data:

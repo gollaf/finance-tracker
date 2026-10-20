@@ -11,6 +11,7 @@ using FinanceTracker.Infrastructure.Messaging;
 using FinanceTracker.Infrastructure.Outbox;
 using FinanceTracker.Infrastructure.Persistence;
 using FinanceTracker.Infrastructure.Persistence.Repositories;
+using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,7 +33,15 @@ namespace FinanceTracker.Infrastructure
                     "ConnectionStrings__FinanceTracker environment variable -- never in " +
                     "appsettings.json.");
 
-            services.AddDbContext<FinanceTrackerDbContext>(options => options.UseNpgsql(connectionString));
+            // Database calls are traced only inside another span -- a request
+            // or a consumed message. The outbox relay polls every few seconds
+            // outside any span, and each poll would otherwise be a trace of
+            // its own. EF Core sends SaveChanges as a batch, hence both filters.
+            services.AddDbContext<FinanceTrackerDbContext>(options => options.UseNpgsql(
+                connectionString,
+                npgsql => npgsql.ConfigureDataSource(dataSource => dataSource.ConfigureTracing(tracing => tracing
+                    .ConfigureCommandFilter(_ => Activity.Current is not null)
+                    .ConfigureBatchFilter(_ => Activity.Current is not null)))));
 
             services.AddScoped<IAccountRepository, AccountRepository>();
             services.AddScoped<ICategoryRepository, CategoryRepository>();

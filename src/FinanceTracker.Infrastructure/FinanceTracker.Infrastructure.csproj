@@ -42,6 +42,17 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Telemetry for both entry points: the SDK, the OTLP exporter, and
+         instrumentation for outgoing HTTP calls, the .NET runtime and Npgsql.
+         RabbitMQ.Client needs no package: it has its own ActivitySources. -->
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.20.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.20.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.20.0" />
+    <PackageReference Include="Npgsql.OpenTelemetry" Version="10.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\FinanceTracker.Application\FinanceTracker.Application.csproj" />
   </ItemGroup>
 

@@ -96,6 +96,9 @@ This starts PostgreSQL, RabbitMQ, the Api and the Worker. Then open:
 - Health endpoints: `http://localhost:5000/health/live` and `/health/ready`
 - RabbitMQ management UI: `http://localhost:15672` (user and password
   `financetracker`, local development only)
+- Telemetry (traces, metrics and logs of the Api and the Worker, in the
+  Aspire Dashboard): `http://localhost:18888`
+  ([ADR 0037](./docs/adr/0037-telemetry-with-opentelemetry.md))
 
 **Signing in.** Every `/api/...` endpoint except `/api/auth` requires a
 signed-in user ([ADR 0026](./docs/adr/0026-authentication-with-aspnet-core-identity.md)).
@@ -457,6 +460,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0034 — Public HTTPS through CloudFront and an internal load balancer](./docs/adr/0034-public-https-through-cloudfront-and-an-internal-load-balancer.md)
 - [0035 — Monitoring on AWS with CloudWatch](./docs/adr/0035-monitoring-on-aws-with-cloudwatch.md)
 - [0036 — AWS deploys from the laptop](./docs/adr/0036-aws-deploys-from-the-laptop.md)
+- [0037 — Telemetry with OpenTelemetry](./docs/adr/0037-telemetry-with-opentelemetry.md)
 
 ## License
 
