@@ -4,12 +4,15 @@ using FinanceTracker.Api.RateLimiting;
 using FinanceTracker.Api.ReverseProxy;
 using FinanceTracker.Application;
 using FinanceTracker.Infrastructure;
+using FinanceTracker.Infrastructure.Observability;
 using FinanceTracker.Infrastructure.Persistence;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
 using Scalar.AspNetCore;
 using System.Text.Json.Serialization;
 
@@ -18,6 +21,14 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services
     .AddApplication()
     .AddInfrastructure(builder.Configuration);
+
+// Health probes are left out of the traces: an orchestrator calls them every
+// few seconds, and each call, with the readiness check's database queries,
+// would be a trace of its own.
+builder.AddTelemetry("finance-tracker-api")
+    .WithTracing(tracing => tracing.AddAspNetCoreInstrumentation(options =>
+        options.Filter = context => !context.Request.Path.StartsWithSegments("/health")))
+    .WithMetrics(metrics => metrics.AddAspNetCoreInstrumentation());
 
 // Enums travel over HTTP as names ("Checking"), not numbers.
 builder.Services.AddControllers().AddJsonOptions(options =>
