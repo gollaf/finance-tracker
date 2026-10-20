@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using FinanceTracker.Infrastructure.Messaging;
 using FluentAssertions;
@@ -78,6 +79,50 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Messaging
 
             var actual = await received.Task.WaitAsync(WaitTimeout);
             actual.Should().Be(sent);
+
+            await consumer.StopAsync(CancellationToken.None);
+        }
+
+        // The outbox relay relies on this: RabbitMQ.Client writes the publish
+        // span into the message's headers, and makes the span it handles the
+        // message in a child of it (RabbitMQTracingOptions.UsePublisherAsParent,
+        // true by default). A client upgrade that changed it fails here.
+        [Fact]
+        public async Task PublishedMessage_IsHandledInTheTraceItWasPublishedIn()
+        {
+            const string queue = "test.traced";
+            const string routingKey = "test.traced-message-sent";
+            var handledIn = new TaskCompletionSource<Activity?>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            using var listener = new ActivityListener
+            {
+                ShouldListenTo = source =>
+                    source.Name is RabbitMQActivitySource.PublisherSourceName or RabbitMQActivitySource.SubscriberSourceName,
+                Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            };
+            ActivitySource.AddActivityListener(listener);
+
+            await DeclareQueueAsync(queue, routingKey, RabbitMqTopology.DefaultDeliveryLimit);
+            var consumer = CreateConsumer(queue, routingKey, RabbitMqTopology.DefaultDeliveryLimit, _ =>
+            {
+                handledIn.TrySetResult(Activity.Current);
+                return Task.CompletedTask;
+            });
+            await consumer.StartAsync(CancellationToken.None);
+
+            // Stands in for the outbox relay's span around the publish.
+            ActivityTraceId traceId;
+            using (var relaySpan = new Activity("outbox relay").Start())
+            {
+                traceId = relaySpan.TraceId;
+                await _publisher.PublishAsync(
+                    ToOutgoing(routingKey, MessageSerialization.Serialize(new TestMessage(Guid.NewGuid(), "traced"))));
+            }
+
+            var handlingSpan = await handledIn.Task.WaitAsync(WaitTimeout);
+            handlingSpan.Should().NotBeNull("RabbitMQ.Client starts a span around each delivery");
+            handlingSpan!.Kind.Should().Be(ActivityKind.Consumer);
+            handlingSpan.TraceId.Should().Be(traceId, "the consumer continues the publisher's trace");
 
             await consumer.StopAsync(CancellationToken.None);
         }

@@ -39,6 +39,9 @@ namespace FinanceTracker.Infrastructure.Persistence.Configurations
             builder.Property(m => m.LastError)
                 .HasMaxLength(OutboxMessage.MaxLastErrorLength);
 
+            builder.Property(m => m.TraceParent)
+                .HasMaxLength(OutboxMessage.MaxTraceParentLength);
+
             // Partial index for the relay's query: it stays small however many
             // processed rows pile up.
             builder.HasIndex(m => m.OccurredAt)

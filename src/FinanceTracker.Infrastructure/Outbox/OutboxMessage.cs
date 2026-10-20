@@ -11,13 +11,18 @@ namespace FinanceTracker.Infrastructure.Outbox
         public const int MaxEventNameLength = 200;
         public const int MaxLastErrorLength = 2000;
 
-        public OutboxMessage(Guid id, string type, string eventName, string payload, DateTimeOffset occurredAt)
+        /// <summary>A W3C traceparent of version 00 is always exactly this long.</summary>
+        public const int MaxTraceParentLength = 55;
+
+        public OutboxMessage(
+            Guid id, string type, string eventName, string payload, DateTimeOffset occurredAt, string? traceParent = null)
         {
             Id = id;
             Type = type;
             EventName = eventName;
             Payload = payload;
             OccurredAt = occurredAt;
+            TraceParent = traceParent;
         }
 
         /// <summary>
@@ -36,6 +41,13 @@ namespace FinanceTracker.Infrastructure.Outbox
         public string Payload { get; private set; }
 
         public DateTimeOffset OccurredAt { get; private set; }
+
+        /// <summary>
+        /// The span the event was recorded in, as a W3C traceparent
+        /// ("00-{trace id}-{span id}-{flags}"), so the relay can publish it
+        /// as part of the same trace. Null when nothing was being traced.
+        /// </summary>
+        public string? TraceParent { get; private set; }
 
         /// <summary>Null until the broker has confirmed receiving it.</summary>
         public DateTimeOffset? ProcessedAt { get; private set; }

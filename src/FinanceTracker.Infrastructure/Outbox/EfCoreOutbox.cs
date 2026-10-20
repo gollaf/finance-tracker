@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FinanceTracker.Application.Common.IntegrationEvents;
 using FinanceTracker.Infrastructure.Messaging;
 using FinanceTracker.Infrastructure.Persistence;
@@ -28,7 +29,14 @@ namespace FinanceTracker.Infrastructure.Outbox
                 type: typeof(TEvent).Name,
                 eventName: TEvent.EventName,
                 payload: MessageSerialization.Serialize(integrationEvent),
-                occurredAt: DateTimeOffset.UtcNow));
+                occurredAt: DateTimeOffset.UtcNow,
+                traceParent: CurrentTraceParent()));
         }
+
+        // The current span -- usually the HTTP request's, or the consumed
+        // message's in the Worker. A W3C span ID is the traceparent itself;
+        // the older hierarchical format can't be carried, so it is skipped.
+        private static string? CurrentTraceParent() =>
+            Activity.Current is { IdFormat: ActivityIdFormat.W3C } activity ? activity.Id : null;
     }
 }
