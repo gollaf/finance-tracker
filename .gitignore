@@ -58,3 +58,7 @@ logs/
 ## AWS CDK -- synthesized templates and the npm-installed CLI
 deploy/aws/cdk.out/
 deploy/aws/node_modules/
+
+## Bicep -- templates compiled to ARM JSON by `bicep build` without --stdout
+deploy/azure/**/*.json
+!deploy/azure/bicepconfig.json
