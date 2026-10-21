@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FinanceTracker.Infrastructure.Outbox;
 using FinanceTracker.Infrastructure.Persistence;
 using FluentAssertions;
@@ -112,6 +113,59 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Outbox
             var row = (await LoadAllAsync()).Single();
             row.Attempts.Should().Be(OutboxRelay.MaxAttempts);
             row.ProcessedAt.Should().BeNull();
+        }
+
+        [Fact]
+        public async Task PublishPendingAsync_PublishesInsideASpanThatContinuesTheEventsTrace()
+        {
+            // Telemetry listening to the relay's spans, as TelemetrySetup does.
+            using var listener = ListenTo(OutboxRelay.ActivitySourceName);
+
+            // The request the event happened in. It has ended by the time the
+            // relay runs, as a real request has.
+            ActivityContext request;
+            using (var requestSpan = new Activity("POST api/transactions").Start())
+            {
+                request = requestSpan.Context;
+                await EnqueueAndSaveAsync(new TestIntegrationEvent(Guid.NewGuid(), "traced"));
+            }
+
+            await _relay.PublishPendingAsync();
+
+            var relaySpan = _publisher.SpansAtPublish.Single();
+            relaySpan.Should().NotBeNull();
+            relaySpan!.Source.Name.Should().Be(OutboxRelay.ActivitySourceName);
+            relaySpan.TraceId.Should().Be(request.TraceId, "the publish continues the request's trace");
+            relaySpan.ParentSpanId.Should().Be(request.SpanId, "the request's span is its parent");
+        }
+
+        [Fact]
+        public async Task PublishPendingAsync_WithoutAStoredTraceparent_PublishesInATraceOfItsOwn()
+        {
+            using var listener = ListenTo(OutboxRelay.ActivitySourceName);
+            Activity.Current = null;
+            await EnqueueAndSaveAsync(new TestIntegrationEvent(Guid.NewGuid(), "untraced"));
+
+            var published = await _relay.PublishPendingAsync();
+
+            published.Should().Be(1);
+            var relaySpan = _publisher.SpansAtPublish.Single();
+            relaySpan.Should().NotBeNull();
+            relaySpan!.ParentSpanId.Should().Be(default(ActivitySpanId), "there was no trace to continue");
+        }
+
+        // Records every span of one ActivitySource, like an OpenTelemetry
+        // TracerProvider with AddSource does. Without a listener,
+        // StartActivity returns null and the relay publishes untraced.
+        private static ActivityListener ListenTo(string sourceName)
+        {
+            var listener = new ActivityListener
+            {
+                ShouldListenTo = source => source.Name == sourceName,
+                Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            };
+            ActivitySource.AddActivityListener(listener);
+            return listener;
         }
 
         private async Task<OutboxMessage> EnqueueAndSaveAsync(TestIntegrationEvent integrationEvent)

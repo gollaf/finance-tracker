@@ -1,3 +1,4 @@
+using FinanceTracker.Infrastructure.Outbox;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Npgsql;
@@ -33,7 +34,8 @@ namespace FinanceTracker.Infrastructure.Observability
                 .WithTracing(tracing => tracing
                     .AddHttpClientInstrumentation()
                     .AddNpgsql()
-                    .AddSource(RabbitMQActivitySource.PublisherSourceName, RabbitMQActivitySource.SubscriberSourceName))
+                    .AddSource(RabbitMQActivitySource.PublisherSourceName, RabbitMQActivitySource.SubscriberSourceName)
+                    .AddSource(OutboxRelay.ActivitySourceName))
                 .WithMetrics(metrics => metrics
                     .AddHttpClientInstrumentation()
                     .AddRuntimeInstrumentation()

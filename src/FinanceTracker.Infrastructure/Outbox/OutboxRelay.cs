@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FinanceTracker.Infrastructure.Messaging;
 using FinanceTracker.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -22,6 +23,12 @@ namespace FinanceTracker.Infrastructure.Outbox
     /// Assumes a single running relay. Two would both publish the same rows
     /// (still correct, but wasteful); supporting that would need
     /// SELECT ... FOR UPDATE SKIP LOCKED here.
+    ///
+    /// Each message is published inside a span that continues the trace the
+    /// event was recorded in (OutboxMessage.TraceParent). RabbitMQ.Client
+    /// makes its publish span a child of that span and writes it into the
+    /// message's headers, and the consumer's span continues from there, so
+    /// one trace runs from the HTTP request to the message's handling.
     /// </remarks>
     public sealed class OutboxRelay : BackgroundService
     {
@@ -33,6 +40,11 @@ namespace FinanceTracker.Infrastructure.Outbox
         /// the outbox's equivalent of a dead-letter queue.
         /// </summary>
         public const int MaxAttempts = 10;
+
+        /// <summary>The ActivitySource the relay's spans come from; telemetry must listen to it.</summary>
+        public const string ActivitySourceName = "FinanceTracker.Outbox";
+
+        private static readonly ActivitySource ActivitySource = new(ActivitySourceName);
 
         private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(2);
 
@@ -101,30 +113,23 @@ namespace FinanceTracker.Infrastructure.Outbox
 
             foreach (var message in pending)
             {
-                try
+                // Ends before the save below, which is bookkeeping of the
+                // relay's, not part of the event's story.
+                using (var activity = StartPublishActivity(message))
                 {
-                    await _publisher.PublishAsync(
-                        new OutgoingMessage(message.Id, message.Type, message.EventName, message.Payload),
-                        cancellationToken);
-
-                    message.MarkProcessed(DateTimeOffset.UtcNow);
-                    published++;
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    message.RecordFailure(ex.Message);
-
-                    if (message.Attempts >= MaxAttempts)
+                    try
                     {
-                        _logger.LogError(ex,
-                            "Outbox message {MessageId} ({Type}) failed to publish {Attempts} times; giving up on it.",
-                            message.Id, message.Type, message.Attempts);
+                        await _publisher.PublishAsync(
+                            new OutgoingMessage(message.Id, message.Type, message.EventName, message.Payload),
+                            cancellationToken);
+
+                        message.MarkProcessed(DateTimeOffset.UtcNow);
+                        published++;
                     }
-                    else
+                    catch (Exception ex) when (ex is not OperationCanceledException)
                     {
-                        _logger.LogWarning(ex,
-                            "Outbox message {MessageId} ({Type}) failed to publish (attempt {Attempts} of {MaxAttempts}).",
-                            message.Id, message.Type, message.Attempts, MaxAttempts);
+                        activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                        RecordFailure(message, ex);
                     }
                 }
 
@@ -135,6 +140,45 @@ namespace FinanceTracker.Infrastructure.Outbox
             }
 
             return published;
+        }
+
+        /// <summary>
+        /// A span for publishing one message, continuing the trace stored with
+        /// it. Null when nothing listens to ActivitySourceName (telemetry off).
+        /// A missing or unreadable traceparent starts a trace of its own.
+        /// </summary>
+        private static Activity? StartPublishActivity(OutboxMessage message)
+        {
+            // isRemote: the span it names ran in another process -- the Api,
+            // or a Worker that recorded the event while handling a message.
+            ActivityContext.TryParse(message.TraceParent, traceState: null, isRemote: true, out var parent);
+
+            var activity = ActivitySource.StartActivity($"outbox relay {message.EventName}", ActivityKind.Internal, parent);
+
+            activity?.SetTag("messaging.message.id", message.Id.ToString());
+            activity?.SetTag("outbox.attempt", message.Attempts + 1);
+            // How long the event waited in the table before being published.
+            activity?.SetTag("outbox.waited_ms", (long)(DateTimeOffset.UtcNow - message.OccurredAt).TotalMilliseconds);
+
+            return activity;
+        }
+
+        private void RecordFailure(OutboxMessage message, Exception ex)
+        {
+            message.RecordFailure(ex.Message);
+
+            if (message.Attempts >= MaxAttempts)
+            {
+                _logger.LogError(ex,
+                    "Outbox message {MessageId} ({Type}) failed to publish {Attempts} times; giving up on it.",
+                    message.Id, message.Type, message.Attempts);
+            }
+            else
+            {
+                _logger.LogWarning(ex,
+                    "Outbox message {MessageId} ({Type}) failed to publish (attempt {Attempts} of {MaxAttempts}).",
+                    message.Id, message.Type, message.Attempts, MaxAttempts);
+            }
         }
 
         private static bool IsMissingOutboxTable(Exception ex) =>

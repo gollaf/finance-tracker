@@ -287,6 +287,10 @@ namespace FinanceTracker.Infrastructure.Migrations
                     b.Property<DateTimeOffset?>("ProcessedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("TraceParent")
+                        .HasMaxLength(55)
+                        .HasColumnType("character varying(55)");
+
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasMaxLength(200)

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using FinanceTracker.Domain.Accounts;
 using FinanceTracker.Domain.Common;
@@ -82,6 +83,42 @@ namespace FinanceTracker.Infrastructure.IntegrationTests.Outbox
 
             await using var verify = new FinanceTrackerDbContext(_options);
             (await verify.OutboxMessages.CountAsync()).Should().Be(0);
+        }
+
+        [Fact]
+        public async Task Enqueue_DuringATracedOperation_StoresThatSpanAsTheTraceparent()
+        {
+            // Stands in for the HTTP request's span. Started by hand, so it
+            // is the current span even with no telemetry listening.
+            using var request = new Activity("POST api/transactions").Start();
+
+            await using (var context = new FinanceTrackerDbContext(_options))
+            {
+                new EfCoreOutbox(context).Enqueue(new TestIntegrationEvent(Guid.NewGuid(), "traced"));
+                await context.SaveChangesAsync();
+            }
+
+            await using var verify = new FinanceTrackerDbContext(_options);
+            var row = await verify.OutboxMessages.SingleAsync();
+
+            // "00-{trace id}-{span id}-{flags}": the request's own span.
+            row.TraceParent.Should().Be(request.Id);
+            row.TraceParent.Should().Contain(request.TraceId.ToString()).And.Contain(request.SpanId.ToString());
+        }
+
+        [Fact]
+        public async Task Enqueue_OutsideAnyTracedOperation_StoresNoTraceparent()
+        {
+            Activity.Current = null;
+
+            await using (var context = new FinanceTrackerDbContext(_options))
+            {
+                new EfCoreOutbox(context).Enqueue(new TestIntegrationEvent(Guid.NewGuid(), "untraced"));
+                await context.SaveChangesAsync();
+            }
+
+            await using var verify = new FinanceTrackerDbContext(_options);
+            (await verify.OutboxMessages.SingleAsync()).TraceParent.Should().BeNull();
         }
     }
 }

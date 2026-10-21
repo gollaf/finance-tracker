@@ -461,6 +461,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0035 — Monitoring on AWS with CloudWatch](./docs/adr/0035-monitoring-on-aws-with-cloudwatch.md)
 - [0036 — AWS deploys from the laptop](./docs/adr/0036-aws-deploys-from-the-laptop.md)
 - [0037 — Telemetry with OpenTelemetry](./docs/adr/0037-telemetry-with-opentelemetry.md)
+- [0038 — Trace context through the outbox](./docs/adr/0038-trace-context-through-the-outbox.md)
 
 ## License
 
