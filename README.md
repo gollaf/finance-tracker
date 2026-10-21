@@ -462,6 +462,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0036 — AWS deploys from the laptop](./docs/adr/0036-aws-deploys-from-the-laptop.md)
 - [0037 — Telemetry with OpenTelemetry](./docs/adr/0037-telemetry-with-opentelemetry.md)
 - [0038 — Trace context through the outbox](./docs/adr/0038-trace-context-through-the-outbox.md)
+- [0039 — Azure foundation in Bicep: network, database, monitoring, identity](./docs/adr/0039-azure-foundation-in-bicep.md)
 
 ## License
 

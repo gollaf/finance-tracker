@@ -178,3 +178,35 @@ jobs:
       # silently ignored, here and by Kubernetes.
       - name: Validate against the Kubernetes schemas
         run: kubeconform -strict -summary -kubernetes-version "$KUBERNETES_VERSION" "$RUNNER_TEMP/rendered.yaml"
+
+  # Compiles and lints the Azure templates in deploy/azure. No Azure account
+  # involved: Bicep checks resource types and properties offline.
+  bicep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # Pinned, with the SHA-256 of the release binary.
+      BICEP_VERSION: v0.48.1
+      BICEP_SHA256: b09ec25a9d376c1f8e33ede6ed22b587f915ad68488d5db77a6f9541748c7f6e
+    steps:
+      - uses: actions/checkout@v7
+
+      # The runner image has a Bicep of its own, but its version changes
+      # whenever the image is updated.
+      - name: Install Bicep
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -fsSL -o "$RUNNER_TEMP/bin/bicep" \
+            "https://github.com/Azure/bicep/releases/download/${BICEP_VERSION}/bicep-linux-x64"
+          echo "${BICEP_SHA256}  $RUNNER_TEMP/bin/bicep" | sha256sum --check
+          chmod +x "$RUNNER_TEMP/bin/bicep"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      # Compiling catches unknown resource types, misspelled properties and
+      # wrong value types. --stdout: the compiled template isn't needed.
+      - name: Build
+        run: bicep build deploy/azure/main.bicep --stdout > /dev/null
+
+      # The rules and their levels are in deploy/azure/bicepconfig.json.
+      - name: Lint
+        run: bicep lint deploy/azure/main.bicep
