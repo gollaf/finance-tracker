@@ -205,8 +205,12 @@ jobs:
       # Compiling catches unknown resource types, misspelled properties and
       # wrong value types. --stdout: the compiled template isn't needed.
       - name: Build
-        run: bicep build deploy/azure/main.bicep --stdout > /dev/null
+        run: |
+          bicep build deploy/azure/main.bicep --stdout > /dev/null
+          bicep build deploy/azure/bootstrap/main.bicep --stdout > /dev/null
 
       # The rules and their levels are in deploy/azure/bicepconfig.json.
       - name: Lint
-        run: bicep lint deploy/azure/main.bicep
+        run: |
+          bicep lint deploy/azure/main.bicep
+          bicep lint deploy/azure/bootstrap/main.bicep

@@ -1,0 +1,44 @@
+name: Azure sign-in check
+
+# Run by hand, from the Actions tab. Prints the subject of the sign-in token
+# GitHub issues to jobs in the "azure" environment -- the value the deploy
+# identity's federated credential must match exactly -- then signs in to
+# Azure with that token, with no stored key, and checks what it can see.
+on:
+  workflow_dispatch:
+
+# Only the right to ask GitHub for an OIDC token. No checkout, no API calls.
+permissions:
+  id-token: write
+
+jobs:
+  sign-in:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # The subject names this environment. Its required reviewer has to
+    # approve every run before the job starts.
+    environment: azure
+    steps:
+      # A token is a signed JSON document in three base64url parts. Only the
+      # middle part, the claims, is decoded and only its subject printed:
+      # the token itself would be usable for a few minutes.
+      - name: Show the token's subject
+        run: |
+          token=$(curl -fsS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api://AzureADTokenExchange" | jq -r .value)
+          claims=$(printf '%s' "$token" | cut -d. -f2 | tr '_-' '/+')
+          while [ $(( ${#claims} % 4 )) -ne 0 ]; do claims="${claims}="; done
+          printf '%s' "$claims" | base64 -d | jq -r '"subject: \(.sub)"'
+
+      # Exchanges GitHub's token for an Azure one, as the deploy identity.
+      - name: Sign in to Azure
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Check access to the resource group
+        run: |
+          az account show --query "{subscription: name, signedInAs: user.type}" --output table
+          az group show --name rg-finance-tracker --query "{name: name, location: location}" --output table
