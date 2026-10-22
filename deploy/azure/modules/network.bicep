@@ -81,6 +81,7 @@ resource databaseDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLi
 }
 
 output appsSubnetId string = resourceId('Microsoft.Network/virtualNetworks/subnets', vnet.name, 'snet-apps')
+output appsSubnetPrefix string = appsSubnetPrefix
 output databaseSubnetId string = resourceId('Microsoft.Network/virtualNetworks/subnets', vnet.name, 'snet-database')
 
 // A module's outputs exist only once all of it is deployed, so whoever

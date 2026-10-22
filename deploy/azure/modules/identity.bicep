@@ -10,6 +10,7 @@ resource apps 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
   tags: tags
 }
 
+output id string = apps.id
 output name string = apps.name
 
 @description('Its object ID in Microsoft Entra ID: what role assignments and the database refer to.')
