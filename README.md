@@ -464,6 +464,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0038 — Trace context through the outbox](./docs/adr/0038-trace-context-through-the-outbox.md)
 - [0039 — Azure foundation in Bicep: network, database, monitoring, identity](./docs/adr/0039-azure-foundation-in-bicep.md)
 - [0040 — Services on Azure Container Apps](./docs/adr/0040-services-on-azure-container-apps.md)
+- [0041 — Azure bootstrap and keyless sign-in from GitHub Actions](./docs/adr/0041-azure-bootstrap-and-keyless-github-sign-in.md)
 
 ## License
 
