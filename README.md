@@ -12,8 +12,8 @@ plain-language summaries of where the money went.
 
 It is a portfolio project, built to practise backend architecture and
 operations end to end -- from the domain model to messaging, containers,
-Kubernetes and CI/CD. Every significant decision is written up as an
-[Architecture Decision Record](./docs/adr).
+Kubernetes, CI/CD, observability and three clouds. Every significant
+decision is written up as an [Architecture Decision Record](./docs/adr).
 
 ## Highlights
 
@@ -43,6 +43,13 @@ Kubernetes and CI/CD. Every significant decision is written up as an
   images built and the Kubernetes manifests validated; `master` publishes
   the images to GitHub Container Registry and is protected by required
   checks.
+- **Observability** -- OpenTelemetry traces, metrics and logs in the Api and
+  the Worker, with the trace carried through the outbox so one trace follows
+  a request from HTTP through RabbitMQ to the consumer.
+- **Three clouds** -- a public demo on an Oracle Cloud VM deployed from
+  GitHub Actions, a copy on AWS (ECS Fargate, RDS, CloudFront, CDK in C#),
+  and a passwordless Azure design in Bicep that was prepared but not
+  deployed. They are [compared side by side](./docs/cloud-comparison.md).
 
 ## Architecture
 
@@ -79,6 +86,8 @@ API ── one DB commit: change + outbox row ──▶ Postgres ◀── Outbo
 | Testing | xUnit, FluentAssertions, NSubstitute, Testcontainers |
 | Infrastructure | Docker, docker compose, Kubernetes (Minikube) with Kustomize |
 | CI/CD | GitHub Actions, GitHub Container Registry |
+| Observability | OpenTelemetry, Aspire Dashboard locally |
+| Cloud | Oracle Cloud VM with Caddy; AWS (ECS Fargate, RDS, CloudFront, CDK in C#); Azure (Container Apps, PostgreSQL Flexible Server, Bicep -- not deployed) |
 
 ## Getting Started
 
@@ -392,18 +401,40 @@ allow GitHub Actions to sign in without a stored key
 checking that nothing is left running and the end-of-sprint cleanup are in
 the [AWS runbook](./docs/aws-operations.md).
 
+## Azure (prepared, not deployed)
+
+The same system designed for Azure, in Bicep in
+[`deploy/azure`](./deploy/azure). It was never deployed: Azure's free-account
+sign-up was refused, and the project uses free tiers only
+([ADR 0042](./docs/adr/0042-azure-sprint-closed-without-a-deploy.md)).
+
+- **Foundation** ([ADR 0039](./docs/adr/0039-azure-foundation-in-bicep.md))
+  -- a virtual network with delegated subnets, PostgreSQL Flexible Server
+  with private access and Microsoft Entra sign-in only, Log Analytics and
+  Application Insights accepting only Entra-signed telemetry, and a
+  user-assigned managed identity for the containers. No password for the
+  database or telemetry exists.
+- **Services** ([ADR 0040](./docs/adr/0040-services-on-azure-container-apps.md))
+  -- a Container Apps environment running RabbitMQ (internal TCP), the
+  Worker and the Api (external HTTPS, scaled to zero when idle), each with
+  migrations as an init container.
+- **Bootstrap and keyless CI** ([ADR 0041](./docs/adr/0041-azure-bootstrap-and-keyless-github-sign-in.md))
+  -- a subscription-level template for the resource groups and a deploy
+  identity that GitHub Actions signs in as through a federated credential,
+  allowed to change one resource group and to assign one role.
+
+CI compiles and lints both templates (`bicep` job). Before a first deploy,
+the application still needs the code that signs in to PostgreSQL with a
+token and the Azure Monitor exporter; ADR 0042 lists what is missing.
+
 ## Roadmap
 
 Done: domain and use cases, persistence and API, Docker, AI insights,
-asynchronous processing with RabbitMQ, Kubernetes, and CI/CD. Next:
+asynchronous processing with RabbitMQ, Kubernetes, CI/CD, sign-in and
+per-user data, observability with OpenTelemetry, and the cloud phase: the
+Oracle demo, the AWS sprint and the Azure design
+([compared here](./docs/cloud-comparison.md)). Next:
 
-- **Cloud deployment**
-  - **Oracle Cloud Always Free VM** -- the permanent, always-on public demo.
-  - **Azure sprint** (timeboxed, within the free trial credit) -- Azure
-    Container Apps, Application Insights via OpenTelemetry, infrastructure
-    as code with Bicep, and passwordless deployment from GitHub Actions.
-  - **AWS sprint** (timeboxed, on the free plan) -- the same system on AWS's
-    managed container services, to compare the two platforms.
 - **Angular frontend.**
 
 The phase-by-phase plan is in [`PROJECT_PLAN.md`](./PROJECT_PLAN.md).
@@ -465,6 +496,7 @@ Significant decisions are logged as ADRs in [`docs/adr/`](./docs/adr):
 - [0039 — Azure foundation in Bicep: network, database, monitoring, identity](./docs/adr/0039-azure-foundation-in-bicep.md)
 - [0040 — Services on Azure Container Apps](./docs/adr/0040-services-on-azure-container-apps.md)
 - [0041 — Azure bootstrap and keyless sign-in from GitHub Actions](./docs/adr/0041-azure-bootstrap-and-keyless-github-sign-in.md)
+- [0042 — Azure sprint closed without a deploy](./docs/adr/0042-azure-sprint-closed-without-a-deploy.md)
 
 ## License
 
