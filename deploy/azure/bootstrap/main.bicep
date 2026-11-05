@@ -8,7 +8,7 @@ targetScope = 'subscription'
 @description('Region for the resource groups and the identity: the one given to `az deployment sub create --location`.')
 param location string = deployment().location
 
-@description('The exact subject GitHub puts in the sign-in token of a job in the "azure" environment, as the Azure sign-in check workflow prints it.')
+@description('The exact subject GitHub puts in the sign-in token of a job in the "azure" environment. For repositories created after 15 July 2026: repo:<owner>@<owner-id>/<repo>@<repo-id>:environment:azure.')
 param githubSubject string
 
 param tags object = {
